@@ -1,0 +1,684 @@
+-- --------------------------------------------------------------------------------
+-- Routine DDL
+-- Note: comments before and after the routine body will not be stored by the server
+-- --------------------------------------------------------------------------------
+DELIMITER $$
+
+CREATE DEFINER=`root`@`%` PROCEDURE `getfpm_projection_report`(IN costcodeOrPgmList TEXT,IN startdate varchar(45),IN enddate varchar(45),IN currencyId int,IN reporttype int,IN reportfilter varchar(20))
+    READS SQL DATA
+BEGIN
+
+DECLARE monthname varchar(20);
+
+DECLARE done INT DEFAULT 0;
+
+/*temporary variable for performance */
+Declare accid_gr TEXT;
+Declare repmonth TEXT;
+DECLARE revenue_prf_valgt double DEFAULT 0.0;
+DECLARE rgm_prf_valgt double DEFAULT 0.0;
+DECLARE rgm_pec_prf_valgt double DEFAULT 0.0;
+DECLARE cost_prf_valgt double DEFAULT 0.0;
+DECLARE effort_cost_prf_valgt double DEFAULT 0.0;
+DECLARE travel_cost_prf_valgt double DEFAULT 0.0;
+DECLARE other_cost_prf_valgt double DEFAULT 0.0;
+DECLARE effort_tot_prf_valgt double DEFAULT 0.0;
+
+DECLARE effort_offshore_prf_valgt double DEFAULT 0.0;
+DECLARE utz_overall_prf_valgt double DEFAULT 0.0;
+DECLARE utz_ind_prf_valgt double DEFAULT 0.0;
+DECLARE fte_cost_overall_prf_valgt double DEFAULT 0.0;
+DECLARE fte_cost_india_prf_valgt double DEFAULT 0.0;
+DECLARE fte_cost_onsite_prf_valgt double DEFAULT 0.0;
+DECLARE yield_prf_valgt double DEFAULT 0.0;
+
+/*temporary variable for projection */
+DECLARE revenue_proj_valgt double DEFAULT 0.0;
+DECLARE rgm_proj_valgt double DEFAULT 0.0;
+DECLARE rgm_pec_proj_valgt double DEFAULT 0.0;
+DECLARE cost_proj_valgt double DEFAULT 0.0;
+DECLARE effort_cost_proj_valgt double DEFAULT 0.0;
+DECLARE travel_cost_proj_valgt double DEFAULT 0.0;
+DECLARE other_cost_proj_valgt double DEFAULT 0.0;
+DECLARE effort_tot_proj_valgt double DEFAULT 0.0;
+
+DECLARE effort_offshore_proj_valgt double DEFAULT 0.0;
+DECLARE utz_overall_proj_valgt double DEFAULT 0.0;
+DECLARE utz_ind_proj_valgt double DEFAULT 0.0;
+DECLARE fte_cost_overall_proj_valgt double DEFAULT 0.0;
+DECLARE fte_cost_india_proj_valgt double DEFAULT 0.0;
+DECLARE fte_cost_onsite_proj_valgt double DEFAULT 0.0;
+DECLARE yield_proj_valgt double DEFAULT 0.0;
+DECLARE pyramid_prf_valgt double DEFAULT 0.0;
+DECLARE pyramidProj double DEFAULT 0.0;
+DECLARE pyramid_proj_valgt double DEFAULT 0.0;
+
+DECLARE effort_india_prf_valgt double DEFAULT 0.0;
+DECLARE effort_india_proj_valgt double DEFAULT 0.0;
+DECLARE effort_onsite_prf_valgt double DEFAULT 0.0;
+DECLARE effort_onsite_proj_valgt double DEFAULT 0.0;
+
+DECLARE effort_billable_overall_valgt double DEFAULT 0.0;
+DECLARE effort_billable_offshore_valgt double DEFAULT 0.0;
+Declare effort_cost_india_proj_valgt double DEFAULT 0.0;
+Declare effort_cost_onsite_proj_valgt double DEFAULT 0.0;
+
+DECLARE effort_cost_india_prf_valgt double DEFAULT 0.0;
+DECLARE effort_cost_onsite_prf_valgt double DEFAULT 0.0;
+  DECLARE currencyValue double default 0.0;
+
+SET @out_number= report_temp_table();
+SET SESSION group_concat_max_len = 10000000;
+set sql_safe_updates=0;
+if(currencyId!=2) then 
+                  set currencyValue=(select ifnull(converted_rate,0) from fpm_currency_converter where from_country_id=2 and        to_country_id=currencyId);
+                else
+                set currencyValue=1.0;
+                end if;
+
+if(reportfilter='account') then
+
+Begin 
+
+
+
+DECLARE reportmonth varchar(20);
+DECLARE v_finished_GT INTEGER DEFAULT 0;
+DECLARE monthlist CURSOR FOR select 
+DATE_FORMAT(m1, '%b %Y') as monthvalue
+from
+(
+select 
+(date_format(STR_TO_DATE(startdate,'%d-%m-%Y'),'%Y-%m-%d') - INTERVAL DAYOFMONTH(date_format(STR_TO_DATE(startdate,'%d-%m-%Y'),'%Y-%m-%d'))-1 DAY) 
++INTERVAL m MONTH as m1
+from
+(
+select @rownum:=@rownum+1 as m from
+(select 1 union select 2 union select 3 union select 4) t1,
+(select 1 union select 2 union select 3 union select 4) t2,
+(select 1 union select 2 union select 3 union select 4) t3,
+(select 1 union select 2 union select 3 union select 4) t4,
+(select @rownum:=-1) t0
+) d1
+) d2 
+where binary m1<=binary date_format(STR_TO_DATE(enddate,'%d-%m-%Y'),'%Y-%m-%d')
+order by m1;
+
+DECLARE CONTINUE HANDLER FOR NOT FOUND SET  v_finished_GT=1;
+
+
+
+OPEN monthlist;
+read_loop: LOOP
+FETCH monthlist INTO monthname;
+  IF v_finished_GT = 1 THEN 
+      LEAVE read_loop;
+     END IF;
+
+                
+
+insert into fpm_perfm_proj_tempmonth_proj(account_id,revenue_proj_val,rgm_proj_val,cost_proj_val,effort_cost_proj_val,travel_cost_proj_val,other_cost_proj_val,effort_tot_proj_val,fte_cost_overall_proj_val,
+fte_cost_india_proj_val,yield_proj_val,effort_india_proj_val,effort_billable_overall,effort_billable_offshore,effort_cost_india_proj_val, `rgm_pec_proj_val`  ,
+  `effort_offshore_proj_val`  ,
+  `utz_overall_proj_val`  ,
+`utz_ind_proj_val`  , 
+ `effort_onsite_proj_val`  ,
+`effort_cost_onsite_proj_val`  , 
+fte_cost_onsite_proj_val  ,pyramid_proj_val, 
+  `report_month` )  
+select f1.account_id,revenue_proj_val,rgm_proj_val,cost_proj_val,effort_cost_proj_val,travel_cost_proj_val,other_cost_proj_val,effort_tot_proj_val,Round(fte_cost_overall_proj_val,2),Round(fte_cost_india_proj_val,2),yield_proj_val,effort_india_proj_val,effort_billable_overall,effort_billable_offshore,effort_cost_india_proj_val,ifnull(ROUND((rgm_proj_val*100/revenue_proj_val),2),0) as rgm_pec_proj_val,ifnull(ROUND(effort_india_proj_val*100/effort_tot_proj_val,2),0) as effort_offshore_proj_val,ifnull(ROUND(effort_billable_overall*100/effort_tot_proj_val,2),0) as utz_overall_proj_val,ifnull(ROUND(effort_billable_offshore*100/effort_india_proj_val,2),0) as utz_ind_proj_val,ifnull(ROUND(effort_tot_proj_val,2),0) - ifnull(ROUND(effort_india_proj_val,2),0) as effort_onsite_proj_val,ifnull(ROUND(effort_cost_proj_val,2),0) - ifnull(ROUND(effort_cost_india_proj_val,2),0) as effort_cost_onsite_proj_val,0,pyramid_proj_val,report_month from 
+ 
+ ( SELECT account_id,FS.fpm_parameter_id,
+ifnull(sum(FC3.count_pr),0) as effort_tot_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC2.count_pr),0),ifnull(sum(FC2.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id=currencyId)),0.00))as revenue_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC4.count_pr),0),ifnull(sum(FC4.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as effort_cost_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC5.count_pr),0),ifnull(sum(FC5.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as travel_cost_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC6.count_pr),0),ifnull(sum(FC6.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as other_cost_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC7.count_pr),0),ifnull(sum(FC7.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as cost_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC8.count_pr),0),ifnull(sum(FC8.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as rgm_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC12.count_pr),0),ifnull(sum(FC12.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as yield_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC16.count_pr),0),ifnull(sum(FC16.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as fte_cost_overall_proj_val,
+if((FB.to_currency_id= currencyId),ifnull(sum(FC17.count_pr),0),ifnull(sum(FC17.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as fte_cost_india_proj_val,
+monthname as report_month FROM ext_fpm_finance_summary FS FORCE INDEX (newforrep) left join ext_fpm_budget_identity FB on FB.id=FS.budget_identity_id and FB.deleted !=1 left join ext_fpm_mapping_acc_pgm FM on FM.fpm_budget_identity_id=FB.id 
+left join ext_fpm_finance_summary_count FC2 FORCE INDEX (newforrep) on FS.id=FC2.fpm_finance_summary_id and FS.fpm_parameter_id=2 and   FC2.scale =  monthname
+left join ext_fpm_finance_summary_count FC3 FORCE INDEX (newforrep) on FS.id=FC3.fpm_finance_summary_id and FS.fpm_parameter_id=3 and   FC3.scale =  monthname
+left join ext_fpm_finance_summary_count FC4 FORCE INDEX (newforrep) on FS.id=FC4.fpm_finance_summary_id and FS.fpm_parameter_id=4 and   FC4.scale =  monthname
+left join ext_fpm_finance_summary_count FC5 FORCE INDEX (newforrep) on FS.id=FC5.fpm_finance_summary_id and FS.fpm_parameter_id=5 and   FC5.scale =  monthname
+left join ext_fpm_finance_summary_count FC6 FORCE INDEX (newforrep) on FS.id=FC6.fpm_finance_summary_id and FS.fpm_parameter_id=6 and   FC6.scale =  monthname
+left join ext_fpm_finance_summary_count FC7 FORCE INDEX (newforrep) on FS.id=FC7.fpm_finance_summary_id and FS.fpm_parameter_id=7 and   FC7.scale =  monthname
+left join ext_fpm_finance_summary_count FC8 FORCE INDEX (newforrep) on FS.id=FC8.fpm_finance_summary_id and FS.fpm_parameter_id=8 and   FC8.scale =  monthname
+left join ext_fpm_finance_summary_count FC12 FORCE INDEX (newforrep) on FS.id=FC12.fpm_finance_summary_id and FS.fpm_parameter_id=12 and   FC12.scale =  monthname
+left join ext_fpm_finance_summary_count FC16 FORCE INDEX (newforrep) on FS.id=FC16.fpm_finance_summary_id and FS.fpm_parameter_id=16 and   FC16.scale =  monthname
+left join ext_fpm_finance_summary_count FC17 FORCE INDEX (newforrep) on FS.id=FC17.fpm_finance_summary_id and FS.fpm_parameter_id=17 and   FC17.scale =  monthname
+
+where FB.deleted !=1 and FS.fpm_parameter_id in (2,3,4,5,6,7,8,12,16,17)  and ((( reportfilter!='program' and find_in_set(costcode, costcodeOrPgmList))or ( reportfilter='program' and  find_in_set(program_id, costcodeOrPgmList)))) group by  monthname,account_id )f1
+left outer join 
+
+(SELECT p1.account_id,effort_india_proj_val,p1.effort_billable_offshore,effort_cost_india_proj_val,effort_billable_overall, monthname,p3.scale,pyramid_proj_val from
+
+(SELECT account_id,ifnull(sum(LC9913.count_pr),0) as effort_india_proj_val,ifnull(sum(LC9915.count_pr),0) as effort_billable_offshore,if((FB.to_currency_id= currencyId),ifnull(sum(LC9916.count_pr),0),ifnull(sum(LC9916.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id=currencyId)),0.00))as effort_cost_india_proj_val, monthname as scale FROM ext_fpm_location_summary LS  left join ext_fpm_budget_identity FB on FB.id=LS.budgetidentity_id and FB.deleted !=1 left join ext_fpm_mapping_acc_pgm FM on FM.fpm_budget_identity_id=LS.budgetidentity_id
+left join ext_fpm_location_summary_count LC9916 FORCE INDEX (newforrep) on LS.id=LC9916.location_summary_id and LS.pupose_type_parameter = 'Effort Cost - Total' and  LC9916.scale =  monthname
+left join ext_fpm_location_summary_count LC9913 FORCE INDEX (newforrep) on LS.id=LC9913.location_summary_id and LS.pupose_type_parameter = 'Effort - Total'  and LC9913.scale =  monthname
+left join ext_fpm_location_summary_count LC9915 FORCE INDEX (newforrep) on LS.id=LC9915.location_summary_id and LS.pupose_type_parameter = 'Bill. Effort' and  LC9915.scale =  monthname
+where (( reportfilter!='program' and find_in_set(costcode, costcodeOrPgmList))or ( reportfilter='program' and  find_in_set(program_id, costcodeOrPgmList))) and LS.pupose_type_parameter in ('Effort - Total','Bill. Effort','Effort Cost - Total') and LS.purpose_type_name='India'  group by scale,account_id) p1
+left outer join 
+ (SELECT account_id,ifnull(sum(SC.count_pr),0) as effort_billable_overall,SC.scale FROM ext_fpm_staffing_summary SS  left join ext_fpm_staffing_summary_count SC  on SS.id=SC.staffing_summary_id  left join ext_fpm_budget_identity FB on FB.id=SS.budgetidentity_id and FB.deleted !=1 left join ext_fpm_mapping_acc_pgm FM on FM.fpm_budget_identity_id=SS.budgetidentity_id where (( reportfilter!='program' and find_in_set(costcode, costcodeOrPgmList))or ( reportfilter='program' and  find_in_set(program_id, costcodeOrPgmList))) and   SC.scale =  monthname and SS.pupose_type_parameter='Bill. Effort' and SS.purpose_type_name='All'group by SC.scale,account_id) p3 on p1.account_id=p3.account_id and p1.scale=p3.scale 
+ left outer join 
+ (select account_id,sum(count_pr) as pyramid_proj_val,monthname as scale from ext_fpm_staffing_resource left join ext_fpm_staffing staff on fpm_staffing_id=staff.id and  scale=monthname and staff.fpm_location_type_id=1 join  fpm_designation desig on staff.desgnation_id=desig.id  and (desig.grade like 'P1%' or desig.grade like 'P2%' or desig.grade like 'P3%') left join ext_fpm_budget_identity FB on FB.id=staff.fpm_budget_identity_id and FB.deleted !=1 left join ext_fpm_mapping_acc_pgm FM on FM.fpm_budget_identity_id=FB.id and deleted !=1   where   find_in_set(costcode,costcodeOrPgmList)	 group by scale,account_id) p4 on  p1.account_id=p4.account_id and p1.scale=p4.scale) f2 on f2.account_id=f1.account_id and f2.scale=f1.report_month;
+END LOOP read_loop;
+CLOSE monthlist;
+       
+                
+insert into fpm_perfm_proj_tempmonth
+select null,p1.account_id,p1.account_name,null,null,null,p1.month_year,rev_a,effcost_a,travcost_a,othcost_a,rgm_a,fte_a,Round(ons_A,2),Round(off_a,2),Round(onseff_a,2),Round(offeff_a,2),Round(FTEBillableCount_a,2),Round(OffshoreFTEBillabcleIndia_a,2),pyramid_ut from 
+(SELECT m.account_id ,m.account_name,month_year,sum(ifnull(revenue,0)) as rev_a,sum(ifnull(effort_cost,0)) as effcost_a,sum(ifnull(travel_cost,0)) as travcost_a,sum(ifnull(other_cost,0)) as othcost_a,sum(ifnull(raw_gm,0)) as rgm_a,sum(ifnull(fte_count,0)) as fte_a,sum(ifnull(onsite_fte_count,0)) as ons_A,sum(ifnull(offshore_fte_count,0)) as off_a,sum(ifnull(onsite_effort_cost,0)) as onseff_a,sum(ifnull(offshore_effort_cost,0)) as offeff_a FROM  rgm_upload_data r left join mapping_costcode_acc m on  m.cost_code=r.pgm_cost_Code where  Find_in_set(pgm_cost_code,costcodeOrPgmList)  and plan_actuals='Budget rate'  and STR_TO_DATE(concat(month_year,'-',1),'%b-%Y-%d') >= STR_TO_DATE(startdate,'%d-%m-%Y') and   STR_TO_DATE(concat(month_year,'-',1),'%b-%Y-%d') <= STR_TO_DATE(enddate,'%d-%m-%Y') group by month_year,m.account_id order by  STR_TO_DATE(month_year,'%b-%Y') ) p1
+left outer join
+(select IFNULL(sum(fte_count),0) as FTEBillableCount_a,month_year,account_id from rgm_upload_data r left join mapping_costcode_acc m on  m.cost_code=r.pgm_cost_Code where Find_in_set(pgm_cost_code,costcodeOrPgmList) and SUBSTRING(pgm_cost_code, 1, 1)='B' and   plan_actuals='Budget rate'  and STR_TO_DATE(concat(month_year,'-',1),'%b-%Y-%d') >= STR_TO_DATE(startdate,'%d-%m-%Y') and   STR_TO_DATE(concat(month_year,'-',1),'%b-%Y-%d') <= STR_TO_DATE(enddate,'%d-%m-%Y') group by month_year,m.account_id order by  STR_TO_DATE(month_year,'%b-%Y')) p2 on p1.month_year=p2.month_year and p1.account_id=p2.account_id
+left outer join
+(select IFNULL(sum(fte_count),0) as OffshoreFTEBillabcleIndia_a,month_year,account_id  from rgm_upload_data r left join mapping_costcode_acc m on  m.cost_code=r.pgm_cost_Code where Find_in_set(pgm_cost_code,costcodeOrPgmList) and SUBSTRING(pgm_cost_code, 1, 1)='B'  and company_location='PSPL' and plan_actuals='Budget rate' and STR_TO_DATE(concat(month_year,'-',1),'%b-%Y-%d') >= STR_TO_DATE(startdate,'%d-%m-%Y') and   STR_TO_DATE(concat(month_year,'-',1),'%b-%Y-%d') <= STR_TO_DATE(enddate,'%d-%m-%Y') group by month_year,m.account_id order by  STR_TO_DATE(month_year,'%b-%Y')) p3  on p1.month_year=p3.month_year and p1.account_id=p3.account_id
+left outer join
+(select IFNULL(sum(utilisation),0) as pyramid_ut,monthyear,account_id  from   pyramid_actuals p left join mapping_costcode_acc m  on p.cost_code=m.cost_Code where Find_in_set(p.cost_code,costcodeOrPgmList) and STR_TO_DATE(concat(monthyear,'-',1),'%b-%Y-%d') >= STR_TO_DATE(startdate,'%d-%m-%Y') and   STR_TO_DATE(concat(monthyear,'-',1),'%b-%Y-%d') <= STR_TO_DATE(enddate,'%d-%m-%Y') and (grade='P1' or grade='P2' or  grade='P3') group by monthyear,m.account_id ) p4  on STR_TO_DATE(concat(p1.month_year,'-',1),'%b-%Y-%d')=STR_TO_DATE(concat(p4.monthyear,'-',1),'%b-%Y-%d') and p1.account_id=p4.account_id;
+  
+select * from  fpm_perfm_proj_tempmonth;
+select 'hh';
+INSERT INTO `fpm_perfm_proj_temp` (`accountid`, `account_name`, `report_month`,`revenue_prf`,`rgm_prf`,`rgm_pec_prf`,`cost_prf`,`effort_cost_prf`,`travel_cost_prf`,`other_cost_prf`,`effort_tot_prf`,`effort_offshore_prf`,`utz_overall_prf`,`utz_ind_prf`,`fte_cost_overall_prf`,`fte_cost_india_prf`,`fte_cost_onsite_prf`,`yield_prf`,`offshore_fte_total`,`fte_billable_count`,`offshore_fte_billable_count`,`effort_cost_india_prf`,`effort_cost_onsite_prf`,`effort_india_prf`,`effort_onsite_prf`,`plan_proj_flag`,pyramid_prf,pyramid_value) 
+ (select accid,accname, DATE_FORMAT(STR_TO_DATE(monthyear,"%b-%Y"),"%b %Y"),
+ROUND((FNCV * currencyValue),2),
+ROUND((RGM*currencyValue),2),
+IFNULL(ROUND((IFNULL((RGM/FNCV),0)*100),2),0),
+ROUND((EffortCost + TravelCost + OtherCost)* currencyValue,2),
+ROUND((EffortCost * currencyValue),2),
+ROUND((TravelCost *currencyValue),2),
+ROUND((OtherCost * currencyValue),2),
+ROUND(FTE,2),
+IFNULL(Round((ROUND(OffshoreFTE,2)/ROUND(FTE,2))*100,2),0),
+IFNULL(ROUND((Round(FTEBillableCount,2)/Round(FTE,2))*100,2),0),
+IFNULL(ROUND((Round(OffshoreFTEBillableIndia,2)/Round(OffshoreFTE,2))*100,2),0),
+IFNULL(ROUND((Round(EffortCost,2)/Round(FTE,2)*currencyValue),2),0),
+IFNULL(ROUND((OffshoreEffortCost*currencyValue/OffshoreFTE),2),0), 
+IFNULL(ROUND((OnsiteEffortCost*currencyValue/OnsiteFTE),2),0), 
+IFNULL(ROUND(Round(FNCV*currencyValue,2)/Round(FTE,2),2),0),
+Round(OffshoreFTE,2),Round(FTEBillableCount,2),Round(OffshoreFTEBillableIndia,2),Round((OffshoreEffortCost*currencyValue),2),
+Round(OnsiteEffortCost*currencyValue,2),Round(OffshoreFTE,2),Round(OnsiteFTE,2),0,Round(pyramid_util*100/OffshoreFTE),pyramid_util from fpm_perfm_proj_tempmonth);
+
+update fpm_perfm_proj_temp t1   
+left outer join fpm_perfm_proj_tempmonth_proj t2 on t1.accountid= t2.account_id and 
+DATE_FORMAT(STR_TO_DATE(t1.report_month,"%b %Y"),"%m %Y")= DATE_FORMAT(STR_TO_DATE(t2.report_month,"%b %Y"),"%m %Y") set flag=1,`revenue_proj`= ROUND(revenue_proj_val,2),`rgm_proj`=ROUND(rgm_proj_val,2),`rgm_pec_proj`=ifnull(ROUND(rgm_pec_proj_val,2),0),`cost_proj`=ifnull(ROUND(cost_proj_val,2),0),
+`effort_cost_proj`=ifnull(ROUND(effort_cost_proj_val,2),0),`travel_cost_proj`=ifnull(ROUND(travel_cost_proj_val,2),0),`other_cost_proj`=ifnull(ROUND(other_cost_proj_val,2),0),`effort_tot_proj`=ifnull(ROUND(effort_tot_proj_val,2),0),`effort_offshore_proj`=effort_offshore_proj_val,`utz_overall_proj`=utz_overall_proj_val,`utz_ind_proj`=utz_ind_proj_val,`fte_cost_overall_proj`=ifnull(ROUND(fte_cost_overall_proj_val,2),0),`fte_cost_india_proj`=ifnull(ROUND(fte_cost_india_proj_val,2),0),`fte_cost_onsite_proj`= ifnull(Round(ROUND(effort_cost_onsite_proj_val,2)/Round(effort_onsite_proj_val,2),2),0),`yield_proj`=ifnull(ROUND(yield_proj_val,2),0),`effort_cost_india_proj`=ifnull(ROUND(effort_cost_india_proj_val,2),0),
+`effort_cost_onsite_proj`=ifnull(round(effort_cost_onsite_proj_val,2),0),
+`effort_india_proj`=ifnull(round(effort_india_proj_val,2),0),
+`effort_onsite_proj`= ifnull(round(effort_onsite_proj_val,2),0),
+`offshore_fte_billable_count_proj`= ifnull(round(effort_billable_offshore,2),0),
+`fte_billable_count_proj`= ifnull(round(effort_billable_overall,2),0),plan_proj_flag=1,p1p2p3_proj=ifnull(ROUND(pyramid_proj_val,2),0),
+`pyramid_proj` =ifnull(ROUND(pyramid_proj_val*100/effort_india_proj_val,2),0) ;
+select 'gg';
+   INSERT INTO `fpm_perfm_proj_temp` (`accountid`, `account_name`, `report_month`,`revenue_prf`,`revenue_proj`,`rgm_prf`,`rgm_proj`,`rgm_pec_prf`,`rgm_pec_proj`,`cost_prf`,`cost_proj`,`effort_cost_prf`,`effort_cost_proj`,`travel_cost_prf`,`travel_cost_proj`,`other_cost_prf`,`other_cost_proj`,`effort_tot_prf`,`effort_tot_proj`,`effort_offshore_prf`,`effort_offshore_proj`,`utz_overall_prf`,`utz_overall_proj`,`utz_ind_prf`,`utz_ind_proj`,`fte_cost_overall_prf`,`fte_cost_overall_proj`,`fte_cost_india_prf`,`fte_cost_india_proj`,`fte_cost_onsite_prf`,`fte_cost_onsite_proj`,`yield_prf`,`yield_proj`,`effort_cost_india_prf`,`effort_cost_india_proj`,`effort_cost_onsite_prf`,`effort_cost_onsite_proj`,`pgm_status`,`effort_india_prf`,`effort_india_proj`,`effort_onsite_prf`,`effort_onsite_proj`,`offshore_fte_billable_count_proj`,`fte_billable_count_proj`,`pyramid_prf`,`pyramid_proj`,`plan_proj_flag`,`offshore_fte_total`,`fte_billable_count`,`offshore_fte_billable_count`,p1p2p3_proj,pyramid_value)  ( select t.account_id, ma.account_name,report_month,ifnull(ROUND(revenue_proj_val,2),0),ifnull(ROUND(revenue_proj_val,2),0),ifnull(ROUND(rgm_proj_val,2),0),ifnull(ROUND(rgm_proj_val,2),0),ifnull(ROUND(rgm_pec_proj_val,2),0),ifnull(ROUND(rgm_pec_proj_val,2),0),ifnull(ROUND(cost_proj_val,2),0),ifnull(ROUND(cost_proj_val),0),ifnull(ROUND(effort_cost_proj_val),0),ifnull(ROUND(effort_cost_proj_val),0),ifnull(ROUND(travel_cost_proj_val),0),ifnull(ROUND(travel_cost_proj_val,2),0),ifnull(ROUND(other_cost_proj_val,2),0),ifnull(ROUND(other_cost_proj_val,2),0),ifnull(ROUND(effort_tot_proj_val,2),0),ifnull(ROUND(effort_tot_proj_val,2),0),ifnull(ROUND(effort_offshore_proj_val,2),0),
+ifnull(ROUND(effort_offshore_proj_val,2),0),ifnull(ROUND(utz_overall_proj_val,2),0),ifnull(ROUND(utz_overall_proj_val,2),0),ifnull(ROUND(utz_ind_proj_val,2),0),ifnull(ROUND(utz_ind_proj_val,2),0),ifnull(ROUND(fte_cost_overall_proj_val,2),0),ifnull(ROUND(fte_cost_overall_proj_val,2),0),ifnull(ROUND(fte_cost_india_proj_val,2),0),Round(ROUND(effort_cost_onsite_proj_val,2)/round(effort_onsite_proj_val,2),2),ifnull(ROUND(effort_cost_onsite_proj_val/ effort_onsite_proj_val,2),0),ifnull(ROUND(effort_cost_onsite_proj_val/ effort_onsite_proj_val,2),0),ifnull(ROUND(yield_proj_val,2),0),ifnull(ROUND(yield_proj_val,2),0),ifnull(ROUND(effort_cost_india_proj_val,2),0),ifnull(ROUND(effort_cost_india_proj_val,2),0),ifnull(ROUND(effort_cost_onsite_proj_val,2),0),ifnull(ROUND(effort_cost_onsite_proj_val,2),0),'', ifnull(ROUND(effort_india_proj_val,2),0),
+ifnull(ROUND(effort_india_proj_val,2),0),
+ifnull(ROUND(effort_onsite_proj_val,2),0),
+ifnull(ROUND(effort_onsite_proj_val,2),0),
+ifnull(ROUND(effort_billable_offshore,2),0),
+ifnull(ROUND(effort_billable_overall,2),0),ifnull(ROUND(pyramid_proj_val*100/effort_india_proj_val,2),0),
+ifnull(ROUND(pyramid_proj_val*100/effort_india_proj_val,2),0),0,ifnull(ROUND(effort_offshore_proj_val,2),0),ifnull(ROUND(effort_billable_overall,2),0),
+ifnull(ROUND(effort_billable_offshore,2),0),ifnull(ROUND(pyramid_proj_val,2),0),ifnull(ROUND(pyramid_proj_val,2),0) from fpm_perfm_proj_tempmonth_proj t
+join oneprodapt.mst_accounts ma on ma.account_id = t.account_id
+where flag is null or flag !=1);
+
+DROP TEMPORARY TABLE IF EXISTS fpm_perfm_proj_tempacctotal; 
+
+create temporary table fpm_perfm_proj_tempacctotal
+select accountid,sum(`fte_billable_count_proj`) as dd,sum(`offshore_fte_billable_count_proj`) as ee,account_name,sum(`revenue_prf`) as revenue_prf_val,sum(`revenue_proj`) as revenue_proj_val,sum(`rgm_prf`) as rgm_prf_val,sum(`rgm_proj`) as rgm_proj_val,ifnull((sum(`rgm_prf`)/sum(`revenue_prf`)*100),0) as rgm_pec_prf_val,ifnull((sum(`rgm_proj`)/sum(`revenue_proj`)*100),0) as rgm_pec_proj_val,sum(`cost_prf`) as cost_prf_val,sum(`cost_proj`) as cost_proj_val,sum(`effort_cost_prf`) as effort_cost_prf_val,sum(`effort_cost_proj`) as effort_cost_proj_val,sum(`travel_cost_prf`) as travel_cost_prf_val,sum(`travel_cost_proj`) as travel_cost_proj_val,sum(`other_cost_prf`) as other_cost_prf_val,sum(`other_cost_proj`) as other_cost_proj_val,sum(`effort_tot_prf`) as effort_tot_prf_val,sum(`effort_tot_proj`) as effort_tot_proj_val,
+ifnull((sum(`effort_india_prf`)/sum(`effort_tot_prf`)*100 )  ,0) as effort_offshore_prf_val,
+ifnull((sum(`effort_india_proj`)/sum(`effort_tot_proj`)*100  )  ,0) as effort_offshore_proj_val,
+ifnull((sum(`fte_billable_count`)/sum(`effort_tot_prf`))*100,0) as utz_overall_prf_val,
+ifnull((sum(`fte_billable_count_proj`)/sum(`effort_tot_proj`)*100),0) as utz_overall_proj_val,
+ifnull((sum(`offshore_fte_billable_count`)/sum(`offshore_fte_total`))*100,0) as utz_ind_prf_val,
+ifnull((sum(`offshore_fte_billable_count_proj`)/sum(`effort_india_proj`)*100),0) as utz_ind_proj_val,
+ifnull((sum(`effort_cost_prf`)/sum(`effort_tot_prf`)  )  ,0) as fte_cost_overall_prf_val,
+ifnull((sum(`effort_cost_proj`)/sum(`effort_tot_proj`))  ,0) as fte_cost_overall_proj_val,
+ifnull((sum(`effort_cost_india_prf`)/sum(`effort_india_prf`))   ,0) as fte_cost_india_prf_val,
+ifnull((sum(`effort_cost_india_proj`)/sum(`effort_india_proj`)),0) as fte_cost_india_proj_val,
+ifnull((sum(`effort_cost_onsite_prf`)/sum(`effort_onsite_prf`)),0) as fte_cost_onsite_prf_val,
+ifnull((sum(`effort_cost_onsite_proj`)/sum(`effort_onsite_proj`)),0) as fte_cost_onsite_proj_val,
+ifnull((sum(`revenue_prf`)/sum(`effort_tot_prf`)),0) as yield_prf_val,
+ifnull((sum(`revenue_proj`)/sum(`effort_tot_proj`)),0) as yield_proj_val,
+sum(`effort_cost_india_prf`) as effort_cost_india_prf_val,sum(`effort_cost_india_proj`) as effort_cost_india_proj_val ,sum(`effort_cost_onsite_prf`) as effort_cost_onsite_prf_val,sum(`effort_cost_onsite_proj`) as effort_cost_onsite_proj_val,
+sum(`effort_india_prf`) as effort_india_prf_val,
+sum(`effort_india_proj`) as effort_india_proj_val,
+sum(`effort_onsite_prf`) as effort_onsite_prf_val,
+sum(`effort_onsite_proj`) as effort_onsite_proj_val,
+sum(`offshore_fte_billable_count_proj`) as effort_billable_overall,
+sum(`fte_billable_count_proj`) as effort_billable_offshore,IFNULL((sum(`pyramid_value`)*100/sum(`effort_india_prf`)),0) as pyramid_prf_val,
+((SUM(p1p2p3_proj)*100)/SUM(effort_india_proj)) as pyramid_proj_val,IFNULL(sum(`offshore_fte_total`),0) as OffshoreFTE,
+IFNULL(sum(`offshore_fte_billable_count`),0) as OffshoreFTEBillableIndia,IFNULL(sum(`offshore_fte_total`),0) as OffShoreFTETotalIndia,
+IFNULL(sum(`fte_billable_count`),0) as FTEBillableCount,SUM(p1p2p3_proj) as p1p2p3_proj_val,ifnull(Sum(pyramid_value),0) as pyramid_value_tot  from fpm_perfm_proj_temp group by accountid;
+
+INSERT INTO `fpm_perfm_proj_temp` (`accountid`, `account_name`, `costcode`,`report_month`,`revenue_prf`,`revenue_proj`,`rgm_prf`,`rgm_proj`,`rgm_pec_prf`,`rgm_pec_proj`,`cost_prf`,`cost_proj`,`effort_cost_prf`,`effort_cost_proj`,`travel_cost_prf`,`travel_cost_proj`,`other_cost_prf`,`other_cost_proj`,`effort_tot_prf`,`effort_tot_proj`,`effort_offshore_prf`,`effort_offshore_proj`,`utz_overall_prf`,`utz_overall_proj`,`utz_ind_prf`,`utz_ind_proj`,`fte_cost_overall_prf`,`fte_cost_overall_proj`,`fte_cost_india_prf`,`fte_cost_india_proj`,`fte_cost_onsite_prf`,`fte_cost_onsite_proj`,`yield_prf`,`yield_proj`,`effort_cost_india_prf`,`effort_cost_india_proj`,`effort_cost_onsite_prf`,`effort_cost_onsite_proj`,`pgm_status`,`effort_india_prf`,`effort_india_proj`,`effort_onsite_prf`,`effort_onsite_proj`,`offshore_fte_billable_count_proj`,`fte_billable_count_proj`,`pyramid_prf`,`pyramid_proj`,`plan_proj_flag`,`offshore_fte_total`,`fte_billable_count`,`offshore_fte_billable_count`,p1p2p3_proj,pyramid_value) 
+(select accountid, account_name, '','AccTotal',ROUND(revenue_prf_val,2),ROUND(revenue_proj_val,2),ROUND(rgm_prf_val,2),ROUND(rgm_proj_val,2),ROUND(rgm_pec_prf_val,2),ROUND(rgm_pec_proj_val,2),ROUND(cost_prf_val,2),ROUND(cost_proj_val,2),ROUND(effort_cost_prf_val,2),ROUND(effort_cost_proj_val,2),ROUND(travel_cost_prf_val,2),ROUND(travel_cost_proj_val,2),ROUND(other_cost_prf_val,2),ROUND(other_cost_proj_val,2),ROUND(effort_tot_prf_val,2),ROUND(effort_tot_proj_val,2),ROUND(effort_offshore_prf_val,2),ROUND(effort_offshore_proj_val,2),ROUND(utz_overall_prf_val,2),ROUND(utz_overall_proj_val,2),ROUND(utz_ind_prf_val,2),ROUND(utz_ind_proj_val,2),ROUND(fte_cost_overall_prf_val,2),ROUND(fte_cost_overall_proj_val,2),ROUND(fte_cost_india_prf_val,2),ROUND(fte_cost_india_proj_val,2),ROUND(fte_cost_onsite_prf_val,2),ROUND(fte_cost_onsite_proj_val,2),ROUND(yield_prf_val,2),ROUND(yield_proj_val,2),
+ROUND(effort_cost_india_prf_val,2),
+ROUND(effort_cost_india_proj_val,2),
+ROUND(effort_cost_onsite_prf_val,2),
+ROUND(effort_cost_onsite_proj_val,2),'',
+ROUND(effort_india_prf_val,2),
+ROUND(effort_india_proj_val,2),
+ROUND(effort_onsite_prf_val,2),
+ROUND(effort_onsite_proj_val,2),
+ROUND(effort_billable_overall,2),
+ROUND(effort_billable_offshore,2),ROUND(pyramid_prf_val,2),
+ROUND(pyramid_proj_val,2),
+3,OffshoreFTE,FTEBillableCount,OffshoreFTEBillableIndia,p1p2p3_proj_val,pyramid_value_tot from fpm_perfm_proj_tempacctotal);
+select 'll';
+  end;
+
+else if (reportfilter='costcode') then
+Begin
+DECLARE v_finished_GT INTEGER DEFAULT 0;
+DECLARE monthlist CURSOR FOR select 
+DATE_FORMAT(m1, '%b %Y') as monthvalue
+from
+(
+select 
+(date_format(STR_TO_DATE(startdate,'%d-%m-%Y'),'%Y-%m-%d') - INTERVAL DAYOFMONTH(date_format(STR_TO_DATE(startdate,'%d-%m-%Y'),'%Y-%m-%d'))-1 DAY) 
++INTERVAL m MONTH as m1
+from
+(
+select @rownum:=@rownum+1 as m from
+(select 1 union select 2 union select 3 union select 4) t1,
+(select 1 union select 2 union select 3 union select 4) t2,
+(select 1 union select 2 union select 3 union select 4) t3,
+(select 1 union select 2 union select 3 union select 4) t4,
+(select @rownum:=-1) t0
+) d1
+) d2 
+where binary m1<=binary date_format(STR_TO_DATE(enddate,'%d-%m-%Y'),'%Y-%m-%d')
+order by m1;
+
+DECLARE CONTINUE HANDLER FOR NOT FOUND SET  v_finished_GT=1;
+
+
+OPEN monthlist;
+read_loop: LOOP
+FETCH monthlist INTO monthname;
+  IF v_finished_GT = 1 THEN 
+      LEAVE read_loop;
+     END IF;
+
+insert into fpm_perfm_proj_tempmonth_proj(account_id,costcode,revenue_proj_val,rgm_proj_val,cost_proj_val,effort_cost_proj_val,travel_cost_proj_val,other_cost_proj_val,effort_tot_proj_val,fte_cost_overall_proj_val,
+fte_cost_india_proj_val,yield_proj_val,effort_india_proj_val,effort_billable_overall,effort_billable_offshore,effort_cost_india_proj_val, `rgm_pec_proj_val`  ,
+  `effort_offshore_proj_val`  ,
+  `utz_overall_proj_val`  ,
+`utz_ind_proj_val`  , 
+ `effort_onsite_proj_val`  ,
+`effort_cost_onsite_proj_val`  ,  
+fte_cost_onsite_proj_val  ,pyramid_proj_val, 
+  `report_month` )  
+select f1.account_id,f1.costcode,revenue_proj_val,rgm_proj_val,cost_proj_val,effort_cost_proj_val,travel_cost_proj_val,other_cost_proj_val,effort_tot_proj_val,fte_cost_overall_proj_val,
+fte_cost_india_proj_val,yield_proj_val,effort_india_proj_val,effort_billable_overall,effort_billable_offshore,effort_cost_india_proj_val,ifnull((rgm_proj_val*100/revenue_proj_val),0) as rgm_pec_proj_val,ifnull(effort_india_proj_val*100/effort_tot_proj_val,0) as effort_offshore_proj_val,ifnull(effort_billable_overall*100/effort_tot_proj_val,0) as utz_overall_proj_val,ifnull(effort_billable_offshore*100/effort_india_proj_val,0) as utz_ind_proj_val,ifnull(ROUND(effort_tot_proj_val,2),0) - ifnull(ROUND(effort_india_proj_val,2),0) as effort_onsite_proj_val,ifnull(ROUND(effort_cost_proj_val,2),0) - ifnull(ROUND(effort_cost_india_proj_val,2),0) as effort_cost_onsite_proj_val,0,pyramid_proj_val,report_month from 
+ 
+ ( SELECT account_id,costcode,FS.fpm_parameter_id,
+ifnull(sum(FC3.count_pr),0) as effort_tot_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC2.count_pr),0),ifnull(sum(FC2.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id=currencyId)),0.00))as revenue_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC4.count_pr),0),ifnull(sum(FC4.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as effort_cost_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC5.count_pr),0),ifnull(sum(FC5.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as travel_cost_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC6.count_pr),0),ifnull(sum(FC6.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as other_cost_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC7.count_pr),0),ifnull(sum(FC7.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as cost_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC8.count_pr),0),ifnull(sum(FC8.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as rgm_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC12.count_pr),0),ifnull(sum(FC12.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as yield_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC16.count_pr),0),ifnull(sum(FC16.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as fte_cost_overall_proj_val,
+if((FB.to_currency_id= currencyId),ifnull(sum(FC17.count_pr),0),ifnull(sum(FC17.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as fte_cost_india_proj_val,
+monthname as report_month FROM ext_fpm_finance_summary FS FORCE INDEX (newforrep) left join ext_fpm_budget_identity FB on FB.id=FS.budget_identity_id and FB.deleted !=1 left join ext_fpm_mapping_acc_pgm FM  on FM.fpm_budget_identity_id=FB.id 
+left join ext_fpm_finance_summary_count FC2 FORCE INDEX (newforrep) on FS.id=FC2.fpm_finance_summary_id and FS.fpm_parameter_id=2 and   FC2.scale =  monthname
+left join ext_fpm_finance_summary_count FC3 FORCE INDEX (newforrep) on FS.id=FC3.fpm_finance_summary_id and FS.fpm_parameter_id=3 and   FC3.scale =  monthname
+left join ext_fpm_finance_summary_count FC4 FORCE INDEX (newforrep) on FS.id=FC4.fpm_finance_summary_id and FS.fpm_parameter_id=4 and   FC4.scale =  monthname
+left join ext_fpm_finance_summary_count FC5 FORCE INDEX (newforrep) on FS.id=FC5.fpm_finance_summary_id and FS.fpm_parameter_id=5 and   FC5.scale =  monthname
+left join ext_fpm_finance_summary_count FC6 FORCE INDEX (newforrep) on FS.id=FC6.fpm_finance_summary_id and FS.fpm_parameter_id=6 and   FC6.scale =  monthname
+left join ext_fpm_finance_summary_count FC7 FORCE INDEX (newforrep) on FS.id=FC7.fpm_finance_summary_id and FS.fpm_parameter_id=7 and   FC7.scale =  monthname
+left join ext_fpm_finance_summary_count FC8 FORCE INDEX (newforrep) on FS.id=FC8.fpm_finance_summary_id and FS.fpm_parameter_id=8 and   FC8.scale =  monthname
+left join ext_fpm_finance_summary_count FC12 FORCE INDEX (newforrep) on FS.id=FC12.fpm_finance_summary_id and FS.fpm_parameter_id=12 and   FC12.scale =  monthname
+left join ext_fpm_finance_summary_count FC16 FORCE INDEX (newforrep) on FS.id=FC16.fpm_finance_summary_id and FS.fpm_parameter_id=16 and   FC16.scale =  monthname
+left join ext_fpm_finance_summary_count FC17 FORCE INDEX (newforrep) on FS.id=FC17.fpm_finance_summary_id and FS.fpm_parameter_id=17 and   FC17.scale =  monthname
+
+where FB.deleted !=1 and FS.fpm_parameter_id in (2,3,4,5,6,7,8,12,16,17)  and ((( reportfilter!='program' and find_in_set(costcode, costcodeOrPgmList))or ( reportfilter='program' and  find_in_set(program_id, costcodeOrPgmList)))) group by  monthname,costcode )f1
+left outer join 
+
+(SELECT p1.account_id,p1.costcode,effort_india_proj_val,p1.effort_billable_offshore,effort_cost_india_proj_val,effort_billable_overall, monthname,p3.scale,pyramid_proj_val from
+
+(SELECT account_id,costcode,ifnull(sum(LC9913.count_pr),0) as effort_india_proj_val,ifnull(sum(LC9915.count_pr),0) as effort_billable_offshore,if((FB.to_currency_id= currencyId),ifnull(sum(LC9916.count_pr),0),ifnull(sum(LC9916.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id=currencyId)),0.00))as effort_cost_india_proj_val, monthname as scale FROM ext_fpm_location_summary LS FORCE INDEX (newforrep) left join ext_fpm_budget_identity FB on FB.id=LS.budgetidentity_id and FB.deleted !=1 left join ext_fpm_mapping_acc_pgm FM on FM.fpm_budget_identity_id=LS.budgetidentity_id
+left join ext_fpm_location_summary_count LC9916 FORCE INDEX (newforrep) on LS.id=LC9916.location_summary_id and LS.pupose_type_parameter = 'Effort Cost - Total' and  LC9916.scale =  monthname
+left join ext_fpm_location_summary_count LC9913 FORCE INDEX (newforrep) on LS.id=LC9913.location_summary_id and LS.pupose_type_parameter = 'Effort - Total'  and LC9913.scale =  monthname
+left join ext_fpm_location_summary_count LC9915 FORCE INDEX (newforrep) on LS.id=LC9915.location_summary_id and LS.pupose_type_parameter = 'Bill. Effort' and  LC9915.scale =  monthname
+where (find_in_set(costcode, costcodeOrPgmList)) and LS.pupose_type_parameter in ('Effort - Total','Bill. Effort','Effort Cost - Total') and LS.purpose_type_name='India'  group by scale,costcode) p1
+left outer join 
+ (SELECT account_id,costcode,ifnull(sum(SC.count_pr),0) as effort_billable_overall,SC.scale FROM ext_fpm_staffing_summary SS  left join ext_fpm_staffing_summary_count SC  on SS.id=SC.staffing_summary_id  left join ext_fpm_budget_identity FB on FB.id=SS.budgetidentity_id and FB.deleted !=1 left join ext_fpm_mapping_acc_pgm FM on FM.fpm_budget_identity_id=SS.budgetidentity_id where (( reportfilter!='program' and find_in_set(costcode, costcodeOrPgmList))or ( reportfilter='program' and  find_in_set(program_id, costcodeOrPgmList))) and   SC.scale =  monthname and SS.pupose_type_parameter='Bill. Effort' and SS.purpose_type_name='All'group by SC.scale,costcode) p3 on p1.costcode=p3.costcode and p1.scale=p3.scale 
+ left outer join 
+ (select account_id,costcode,sum(count_pr) as pyramid_proj_val,monthname as scale from ext_fpm_staffing_resource left join ext_fpm_staffing staff on fpm_staffing_id=staff.id and  scale=monthname and staff.fpm_location_type_id=1 join  fpm_designation desig on staff.desgnation_id=desig.id  and (desig.grade like 'P1%' or desig.grade like 'P2%' or desig.grade like 'P3%') left join ext_fpm_budget_identity FB on FB.id=staff.fpm_budget_identity_id and FB.deleted !=1 left join ext_fpm_mapping_acc_pgm FM on FM.fpm_budget_identity_id=FB.id and deleted !=1   where   find_in_set(costcode,costcodeOrPgmList)	 group by scale,costcode) p4 on  p1.costcode=p4.costcode and p1.scale=p4.scale) f2 on f2.costcode=f1.costcode and f2.scale=f1.report_month;
+
+END LOOP read_loop;
+CLOSE monthlist;
+
+
+
+insert into fpm_perfm_proj_tempmonth (id,accid,accname,costcode,monthyear,FNCV,EffortCost,TravelCost,OtherCost,RGM,FTE,OnsiteFTE,OffshoreFTE,OnsiteEffortCost,OffshoreEffortCost,FTEBillableCount,OffshoreFTEBillableIndia,pyramid_util)
+select null,account_id,p1.account_name,p1.cc_a,p1.month_year,rev_a,effcost_a,travcost_a,othcost_a,rgm_a,Round(fte_a,2),Round(ons_A,2),Round(off_a,2),Round(onseff_a,2),Round(offeff_a,2),Round(FTEBillableCount_a,2),Round(OffshoreFTEBillabcleIndia_a,2),pyramid_ut from 
+(SELECT m.account_id,m.account_name,IFNULL(sub_cost_code,0) as cc_a,month_year,sum(ifnull(revenue,0)) as rev_a,sum(ifnull(effort_cost,0)) as effcost_a,sum(ifnull(travel_cost,0)) as travcost_a,sum(ifnull(other_cost,0)) as othcost_a,sum(ifnull(raw_gm,0)) as rgm_a,sum(ifnull(fte_count,0)) as fte_a,sum(ifnull(onsite_fte_count,0)) as ons_A,sum(ifnull(offshore_fte_count,0)) as off_a,sum(ifnull(onsite_effort_cost,0)) as onseff_a,sum(ifnull(offshore_effort_cost,0)) as offeff_a FROM  rgm_upload_data r left join mapping_costcode_acc m on  m.cost_code=r.pgm_cost_Code where  Find_in_set(pgm_cost_code,costcodeOrPgmList)  and plan_actuals='Budget rate'  and STR_TO_DATE(concat(month_year,'-',1),'%b-%Y-%d') >= STR_TO_DATE(startdate,'%d-%m-%Y') and   STR_TO_DATE(concat(month_year,'-',1),'%b-%Y-%d') <= STR_TO_DATE(enddate,'%d-%m-%Y') group by month_year,sub_cost_code order by  STR_TO_DATE(month_year,'%b-%Y') ) p1
+left outer join
+(select IFNULL(sum(fte_count),0) as FTEBillableCount_a,month_year,pgm_cost_code as cc_a from rgm_upload_data r left join mapping_costcode_acc m on  m.cost_code=r.pgm_cost_Code where Find_in_set(pgm_cost_code,costcodeOrPgmList) and SUBSTRING(pgm_cost_code, 1, 1)='B' and   plan_actuals='Budget rate'  and STR_TO_DATE(concat(month_year,'-',1),'%b-%Y-%d') >= STR_TO_DATE(startdate,'%d-%m-%Y') and   STR_TO_DATE(concat(month_year,'-',1),'%b-%Y-%d') <= STR_TO_DATE(enddate,'%d-%m-%Y') group by month_year,sub_cost_code order by  STR_TO_DATE(month_year,'%b-%Y')) p2 on p1.month_year=p2.month_year and p1.cc_a=p2.cc_a
+left outer join
+(select IFNULL(sum(fte_count),0) as OffshoreFTEBillabcleIndia_a,month_year,pgm_cost_code cc_a  from rgm_upload_data r left join mapping_costcode_acc m on  m.cost_code=r.pgm_cost_Code where Find_in_set(pgm_cost_code,costcodeOrPgmList) and SUBSTRING(pgm_cost_code, 1, 1)='B'  and company_location='PSPL' and plan_actuals='Budget rate' and STR_TO_DATE(concat(month_year,'-',1),'%b-%Y-%d') >= STR_TO_DATE(startdate,'%d-%m-%Y') and   STR_TO_DATE(concat(month_year,'-',1),'%b-%Y-%d') <= STR_TO_DATE(enddate,'%d-%m-%Y') group by month_year,sub_cost_code order by  STR_TO_DATE(month_year,'%b-%Y')) p3  on p1.month_year=p3.month_year and p1.cc_a=p3.cc_a
+left outer join
+(select IFNULL(sum(utilisation),0) as pyramid_ut,monthyear,m.sub_cost_code as cc_a from   pyramid_actuals p left join mapping_costcode_acc m  on p.cost_code=m.cost_Code where Find_in_set(p.cost_code,costcodeOrPgmList) and STR_TO_DATE(concat(monthyear,'-',1),'%b-%Y-%d') >= STR_TO_DATE(startdate,'%d-%m-%Y') and   STR_TO_DATE(concat(monthyear,'-',1),'%b-%Y-%d') <= STR_TO_DATE(enddate,'%d-%m-%Y') and (grade='P1' or grade='P2' or  grade='P3') group by monthyear,m.sub_cost_code ) p4  on STR_TO_DATE(concat(p1.month_year,'-',1),'%b-%Y-%d')=STR_TO_DATE(concat(p4.monthyear,'-',1),'%b-%Y-%d') and p1.cc_a=p4.cc_a;
+
+
+INSERT INTO `fpm_perfm_proj_temp` (`accountid`, `account_name`,`costcode`, `report_month`,`revenue_prf`,`rgm_prf`,`rgm_pec_prf`,`cost_prf`,`effort_cost_prf`,`travel_cost_prf`,`other_cost_prf`,`effort_tot_prf`,`effort_offshore_prf`,`utz_overall_prf`,`utz_ind_prf`,`fte_cost_overall_prf`,`fte_cost_india_prf`,`fte_cost_onsite_prf`,`yield_prf`,`offshore_fte_total`,`fte_billable_count`,`offshore_fte_billable_count`,`effort_cost_india_prf`,`effort_cost_onsite_prf`,`effort_india_prf`,`effort_onsite_prf`,`plan_proj_flag`,pyramid_prf,pyramid_value)
+(select accid,accname,IFNULL(costcode,''), DATE_FORMAT(STR_TO_DATE(monthyear,"%b-%Y"),"%b %Y"),
+ROUND((FNCV * currencyValue),2),
+ROUND((RGM *currencyValue),2),
+IFNULL(ROUND((IFNULL((RGM/FNCV),0)*100),2),0),
+ROUND((EffortCost + TravelCost + OtherCost)*currencyValue,2),
+ROUND((EffortCost * currencyValue),2),
+ROUND((TravelCost * currencyValue),2),
+ROUND((OtherCost * currencyValue),2),
+ROUND(FTE,2),
+ifnull(ROUND((OffshoreFTE/FTE)*100,2),0),
+ifnull(ROUND((FTEBillableCount*100/FTE),2),0),
+ifnull(ROUND((OffshoreFTEBillableIndia*100/OffshoreFTE),2),0),
+ifnull(ROUND(Round((EffortCost*currencyValue),2)/Round(FTE,2),2),0),
+ifnull(ROUND((OffshoreEffortCost*currencyValue/OffshoreFTE),2),0),
+ifnull(ROUND(OnsiteEffortCost*currencyValue/OnsiteFTE,2),0),
+ifnull(ROUND(FNCV*currencyValue/FTE,2),0), 
+Round(OffshoreFTE,2),Round(FTEBillableCount,2), Round(OffshoreFTEBillableIndia,2),
+Round(OffshoreEffortCost*currencyValue,2),Round(OnsiteEffortCost*currencyValue,2),Round(OffshoreFTE,2),Round(OnsiteFTE,2),0,Round(pyramid_util*100/OffshoreFTE),pyramid_util from fpm_perfm_proj_tempmonth);
+select * from fpm_perfm_proj_temp;
+update fpm_perfm_proj_temp t1
+left  join fpm_perfm_proj_tempmonth_proj t2 on t1.costcode= t2.costcode and 
+DATE_FORMAT(STR_TO_DATE(t1.report_month,"%b %Y"),"%m %Y")= DATE_FORMAT(STR_TO_DATE(t2.report_month,"%b %Y"),"%m %Y")   set flag=1,`revenue_proj`= ROUND(revenue_proj_val,2),`rgm_proj`=ROUND(rgm_proj_val,2),`rgm_pec_proj`=ifnull(ROUND(rgm_pec_proj_val,2),0),`cost_proj`=ifnull(ROUND(cost_proj_val,2),0),`effort_cost_proj`=ifnull(ROUND(effort_cost_proj_val,2),0),`travel_cost_proj`=ifnull(ROUND(travel_cost_proj_val,2),0),`other_cost_proj`=ifnull(ROUND(other_cost_proj_val,2),0),`effort_tot_proj`=ifnull(ROUND(effort_tot_proj_val,2),0),`effort_offshore_proj`=ifnull(ROUND(effort_offshore_proj_val,2),0),`utz_overall_proj`=ifnull(ROUND(utz_overall_proj_val,2),0),`utz_ind_proj`=ifnull(ROUND(utz_ind_proj_val,2),0),`fte_cost_overall_proj`=ifnull(ROUND(fte_cost_overall_proj_val,2),0),`fte_cost_india_proj`=ifnull(ROUND(fte_cost_india_proj_val,2),0),`fte_cost_onsite_proj`=ifnull(ROUND(effort_cost_onsite_proj_val/ effort_onsite_proj_val,2),0),`yield_proj`=ifnull(ROUND(yield_proj_val,2),0),`effort_cost_india_proj`=ifnull(ROUND(effort_cost_india_proj_val,2),0),
+`effort_cost_onsite_proj`=ifnull(ROUND(effort_cost_onsite_proj_val,2),0),
+`effort_india_proj`=ifnull(ROUND(effort_india_proj_val,2),0),
+`effort_onsite_proj`= ifnull(ROUND(effort_onsite_proj_val,2),0),
+`offshore_fte_billable_count_proj`= ifnull(ROUND(effort_billable_offshore,2),0),
+`fte_billable_count_proj`= ifnull(ROUND(effort_billable_overall,2),0),`pyramid_proj` =ifnull(ROUND(pyramidProj,2),0),plan_proj_flag=1,
+p1p2p3_proj=ROUND(pyramid_proj_val,2),
+`pyramid_proj` =ifnull(ROUND(pyramid_proj_val*100/effort_india_proj_val,2),0) ;
+
+
+
+
+   INSERT INTO `fpm_perfm_proj_temp` (`accountid`, `account_name`,costcode, `report_month`,`revenue_prf`,`revenue_proj`,`rgm_prf`,`rgm_proj`,`rgm_pec_prf`,`rgm_pec_proj`,`cost_prf`,`cost_proj`,`effort_cost_prf`,`effort_cost_proj`,`travel_cost_prf`,`travel_cost_proj`,`other_cost_prf`,`other_cost_proj`,`effort_tot_prf`,`effort_tot_proj`,`effort_offshore_prf`,`effort_offshore_proj`,`utz_overall_prf`,`utz_overall_proj`,`utz_ind_prf`,`utz_ind_proj`,`fte_cost_overall_prf`,`fte_cost_overall_proj`,`fte_cost_india_prf`,`fte_cost_india_proj`,`fte_cost_onsite_prf`,`fte_cost_onsite_proj`,`yield_prf`,`yield_proj`,`effort_cost_india_prf`,`effort_cost_india_proj`,`effort_cost_onsite_prf`,`effort_cost_onsite_proj`,`pgm_status`,`effort_india_prf`,`effort_india_proj`,`effort_onsite_prf`,`effort_onsite_proj`,`fte_billable_count_proj`,`offshore_fte_billable_count_proj`,`pyramid_prf`,`pyramid_proj`,`plan_proj_flag`,`offshore_fte_total`,`fte_billable_count`,`offshore_fte_billable_count`,p1p2p3_proj,pyramid_value)  ( select t.account_id, ma.account_name,costcode,report_month,ifnull(ROUND(revenue_proj_val,2),0),ifnull(ROUND(revenue_proj_val,2),0),ifnull(ROUND(rgm_proj_val,2),0),ifnull(ROUND(rgm_proj_val,2),0),ifnull(ROUND(rgm_pec_proj_val,2),0),ifnull(ROUND(rgm_pec_proj_val,2),0),ifnull(ROUND(cost_proj_val,2),0),ifnull(ROUND(cost_proj_val,2),0),ifnull(ROUND(effort_cost_proj_val,2),0),ifnull(ROUND(effort_cost_proj_val,2),0),ifnull(ROUND(travel_cost_proj_val,2),0),ifnull(ROUND(travel_cost_proj_val,2),0),ifnull(ROUND(other_cost_proj_val,2),0),ifnull(ROUND(other_cost_proj_val,2),0),ifnull(ROUND(effort_tot_proj_val,2),0),ifnull(ROUND(effort_tot_proj_val,2),0),ifnull(ROUND(effort_offshore_proj_val,2),0),ifnull(ROUND(effort_offshore_proj_val,2),0),ifnull(ROUND(utz_overall_proj_val,2),0),ifnull(ROUND(utz_overall_proj_val,2),0),ifnull(ROUND(utz_ind_proj_val,2),0),ifnull(ROUND(utz_ind_proj_val,2),0),ifnull(ROUND(fte_cost_overall_proj_val,2),0),ifnull(ROUND(fte_cost_overall_proj_val,2),0),ifnull(ROUND(fte_cost_india_proj_val,2),0),ifnull(ROUND(fte_cost_india_proj_val,2),0),Round(ROUND(effort_cost_onsite_proj_val,2)/round(effort_onsite_proj_val,2),2),ifnull(ROUND(effort_cost_onsite_proj_val/ effort_onsite_proj_val,2),0),ifnull(ROUND(yield_proj_val,2),0),ifnull(ROUND(yield_proj_val,2),0),ifnull(ROUND(effort_cost_india_proj_val,2),0),ifnull(ROUND(effort_cost_india_proj_val,2),0),effort_cost_onsite_proj_val,effort_cost_onsite_proj_val,'',
+   ifnull(ROUND(effort_india_proj_val,2),0),
+ifnull(ROUND(effort_india_proj_val,2),0),
+ifnull(effort_onsite_proj_val,0),
+ifnull(effort_onsite_proj_val,0),
+ifnull(effort_billable_overall,0),
+ifnull(effort_billable_offshore,0),ifnull(ROUND(pyramid_proj_val*100/effort_india_proj_val,2),0),
+ifnull(ROUND(pyramid_proj_val*100/effort_india_proj_val,2),0),0,
+ifnull(ROUND(effort_offshore_proj_val,2),0),
+ifnull(ROUND(effort_billable_overall,2),0),
+ifnull(ROUND(effort_billable_offshore,2),0),ifnull(ROUND(pyramid_proj_val,2),0),ifnull(ROUND(pyramid_proj_val,2),0) from fpm_perfm_proj_tempmonth_proj t
+join oneprodapt.mst_accounts ma on ma.account_id = t.account_id
+where flag is null or flag!=1);
+
+DROP TEMPORARY TABLE IF EXISTS fpm_perfm_proj_temptotal;  
+create temporary table fpm_perfm_proj_temptotal
+select `accountid`, `account_name`,sum(`offshore_fte_billable_count_proj`) ,sum(`fte_billable_count_proj`),costcode,sum(`revenue_prf`) as revenue_prf_val,sum(`revenue_proj`) as revenue_proj_val,sum(`rgm_prf`) as rgm_prf_val,sum(`rgm_proj`) as rgm_proj_val,ifnull((sum(`rgm_prf`)/sum(`revenue_prf`)*100),0) as rgm_pec_prf_val,ifnull((sum(`rgm_proj`)/sum(`revenue_proj`)*100),0) as rgm_pec_proj_val,sum(`cost_prf`) as cost_prf_val,sum(`cost_proj`) as cost_proj_val,sum(`effort_cost_prf`) as effort_cost_prf_val,sum(`effort_cost_proj`) as effort_cost_proj_val,sum(`travel_cost_prf`) as travel_cost_prf_val,sum(`travel_cost_proj`) as travel_cost_proj_val,sum(`other_cost_prf`) as other_cost_prf_val,sum(`other_cost_proj`) as other_cost_proj_val,sum(`effort_tot_prf`) as effort_tot_prf_val,sum(`effort_tot_proj`) as effort_tot_proj_val,
+ifnull((sum(`effort_india_prf`)/sum(`effort_tot_prf`))*100   ,0) as effort_offshore_prf_val,
+ifnull((sum(`effort_india_proj`)/sum(`effort_tot_proj`))*100  ,0) as effort_offshore_proj_val,
+ifnull((sum(`fte_billable_count`)/sum(`effort_tot_prf`))*100,0) as utz_overall_prf_val,
+ifnull((sum(`fte_billable_count_proj`)/sum(`effort_tot_proj`)*100),0) as utz_overall_proj_val,
+ifnull((sum(`offshore_fte_billable_count`)/sum(`offshore_fte_total`))*100,0) as utz_ind_prf_val,
+ifnull((sum(`offshore_fte_billable_count_proj`)/sum(`effort_india_proj`)*100),0) as utz_ind_proj_val,
+ifnull((sum(`effort_cost_prf`)/sum(`effort_tot_prf`))   ,0) as fte_cost_overall_prf_val,
+ifnull((sum(`effort_cost_proj`)/sum(`effort_tot_proj`))  ,0) as fte_cost_overall_proj_val,
+ifnull((sum(`effort_cost_india_prf`)/sum(`effort_india_prf`))    ,0) as fte_cost_india_prf_val,
+ifnull((sum(`effort_cost_india_proj`)/sum(`effort_india_proj`)) ,0) as fte_cost_india_proj_val,
+ifnull((sum(`effort_cost_onsite_prf`)/sum(`effort_onsite_prf`)) ,0) as fte_cost_onsite_prf_val,
+ifnull((sum(`effort_cost_onsite_proj`)/sum(`effort_onsite_proj`)) ,0) as fte_cost_onsite_proj_val,
+ifnull((sum(`revenue_prf`)/sum(`effort_tot_prf`)) ,0) as yield_prf_val,
+ifnull((sum(`revenue_proj`)/sum(`effort_tot_proj`)) ,0) as yield_proj_val,
+
+sum(`effort_cost_india_prf`) as effort_cost_india_prf_val,sum(`effort_cost_india_proj`) as effort_cost_india_proj_val ,sum(`effort_cost_onsite_prf`) as effort_cost_onsite_prf_val,sum(`effort_cost_onsite_proj`) as effort_cost_onsite_proj_val,
+sum(`effort_india_prf`) as effort_india_prf_val,
+sum(`effort_india_proj`) as effort_india_proj_val,
+sum(`effort_onsite_prf`) as effort_onsite_prf_val,
+sum(`effort_onsite_proj`) as effort_onsite_proj_val,
+sum(`fte_billable_count_proj`) as effort_billable_overall,IFNULL(sum(`offshore_fte_total`),0) as OffshoreFTE,
+IFNULL(sum(`offshore_fte_billable_count`),0) as OffshoreFTEBillableIndia,IFNULL(sum(`offshore_fte_total`),0) as OffShoreFTETotalIndia,
+IFNULL(sum(`fte_billable_count`),0) as FTEBillableCount,
+sum(`offshore_fte_billable_count_proj`) as effort_billable_offshore,ifnull(ROUND(SUM(pyramid_value)*100/SUM(effort_india_prf),2),0) as pyramid_prf_val,
+ifnull(ROUND(SUM(p1p2p3_proj)*100/SUM(effort_india_proj),2),0) as pyramid_proj_val,SUM(p1p2p3_proj) as p1p2p3_proj_val,SUM(pyramid_value) as py_val from fpm_perfm_proj_temp group by costcode;
+
+
+
+INSERT INTO `fpm_perfm_proj_temp` (`accountid`, `account_name`, `costcode`,`report_month`,`revenue_prf`,`revenue_proj`,`rgm_prf`,`rgm_proj`,`rgm_pec_prf`,`rgm_pec_proj`,`cost_prf`,`cost_proj`,`effort_cost_prf`,`effort_cost_proj`,`travel_cost_prf`,`travel_cost_proj`,`other_cost_prf`,`other_cost_proj`,`effort_tot_prf`,`effort_tot_proj`,`effort_offshore_prf`,`effort_offshore_proj`,`utz_overall_prf`,`utz_overall_proj`,`utz_ind_prf`,`utz_ind_proj`,`fte_cost_overall_prf`,`fte_cost_overall_proj`,`fte_cost_india_prf`,`fte_cost_india_proj`,`fte_cost_onsite_prf`,`fte_cost_onsite_proj`,`yield_prf`,`yield_proj`,`effort_cost_india_prf`,`effort_cost_india_proj`,`effort_cost_onsite_prf`,`effort_cost_onsite_proj`,`pgm_status`,`effort_india_prf`,`effort_india_proj`,`effort_onsite_prf`,`effort_onsite_proj`,`fte_billable_count_proj`,`offshore_fte_billable_count_proj`,`pyramid_prf`,`pyramid_proj`,`plan_proj_flag`,`offshore_fte_total`,`fte_billable_count`,`offshore_fte_billable_count`,p1p2p3_proj,pyramid_value) 
+  (select `accountid`, `account_name`,costcode,'Total',ROUND(revenue_prf_val,2),ROUND(revenue_proj_val,2),ROUND(rgm_prf_val,2),ROUND(rgm_proj_val,2),ROUND(rgm_pec_prf_val,2),ROUND(rgm_pec_proj_val,2),ROUND(cost_prf_val,2),ROUND(cost_proj_val,2),ROUND(effort_cost_prf_val,2),ROUND(effort_cost_proj_val,2),ROUND(travel_cost_prf_val,2),ROUND(travel_cost_proj_val,2),ROUND(other_cost_prf_val,2),ROUND(other_cost_proj_val,2),ROUND(effort_tot_prf_val,2),ROUND(effort_tot_proj_val,2),ROUND(effort_offshore_prf_val,2),ROUND(effort_offshore_proj_val,2),ROUND(utz_overall_prf_val,2),ROUND(utz_overall_proj_val,2),ROUND(utz_ind_prf_val,2),ROUND(utz_ind_proj_val,2),ROUND(fte_cost_overall_prf_val,2),ROUND(fte_cost_overall_proj_val,2),ROUND(fte_cost_india_prf_val,2),ROUND(fte_cost_india_proj_val,2),ROUND(fte_cost_onsite_prf_val,2),ROUND(fte_cost_onsite_proj_val,2),ROUND(yield_prf_val,2),ROUND(yield_proj_val,2),ROUND(effort_cost_india_prf_val,2),
+ROUND(effort_cost_india_proj_val,2),
+ROUND(effort_cost_onsite_prf_val,2),
+ROUND(effort_cost_onsite_proj_val,2),'',
+ROUND(effort_india_prf_val,2),
+ROUND(effort_india_proj_val,2),
+ROUND(effort_onsite_prf_val,2),
+ROUND(effort_onsite_proj_val,2),
+ROUND(effort_billable_overall,2),
+ROUND(effort_billable_offshore,2),
+ROUND(pyramid_prf_val,2),
+ROUND(pyramid_proj_val,2),3,OffshoreFTE,FTEBillableCount,OffshoreFTEBillableIndia,p1p2p3_proj_val,py_val from fpm_perfm_proj_temptotal) ;
+
+DROP TEMPORARY TABLE IF EXISTS fpm_perfm_proj_tempacctotal;
+create temporary table fpm_perfm_proj_tempacctotal
+select accountid,account_name,sum(`revenue_prf`) as revenue_prf_val,sum(`revenue_proj`) as revenue_proj_val,sum(`rgm_prf`) as rgm_prf_val,sum(`rgm_proj`) as rgm_proj_val,ifnull((sum(`rgm_prf`)/sum(`revenue_prf`)*100),0) as rgm_pec_prf_val,ifnull((sum(`rgm_proj`)/sum(`revenue_proj`)*100),0) as rgm_pec_proj_val,sum(`cost_prf`) as cost_prf_val,sum(`cost_proj`) as cost_proj_val,sum(`effort_cost_prf`) as effort_cost_prf_val,sum(`effort_cost_proj`) as effort_cost_proj_val,sum(`travel_cost_prf`) as travel_cost_prf_val,sum(`travel_cost_proj`) as travel_cost_proj_val,sum(`other_cost_prf`) as other_cost_prf_val,sum(`other_cost_proj`) as other_cost_proj_val,sum(`effort_tot_prf`) as effort_tot_prf_val,sum(`effort_tot_proj`) as effort_tot_proj_val,
+ifnull((sum(`effort_india_prf`)/sum(`effort_tot_prf`))*100   ,0) as effort_offshore_prf_val,
+ifnull((sum(`effort_india_proj`)/sum(`effort_tot_proj`))*100   ,0) as effort_offshore_proj_val,
+ifnull((sum(`fte_billable_count`)/sum(`effort_tot_prf`))*100,0) as utz_overall_prf_val,
+ifnull((sum(`fte_billable_count_proj`)/sum(`effort_tot_proj`)*100),0) as utz_overall_proj_val,
+ifnull((sum(`offshore_fte_billable_count`)/sum(`offshore_fte_total`))*100,0) as utz_ind_prf_val,
+ifnull((sum(`offshore_fte_billable_count_proj`)/sum(`effort_india_proj`)*100),0) as utz_ind_proj_val,
+ifnull((sum(`effort_cost_prf`)/sum(`effort_tot_prf`))  ,0) as fte_cost_overall_prf_val,
+ifnull((sum(`effort_cost_proj`)/sum(`effort_tot_proj`))    ,0) as fte_cost_overall_proj_val,
+ifnull((sum(`effort_cost_india_prf`)/sum(`effort_india_prf`)  )  ,0) as fte_cost_india_prf_val,
+ifnull((sum(`effort_cost_india_proj`)/sum(`effort_india_proj`) )  ,0) as fte_cost_india_proj_val,
+ifnull((sum(`effort_cost_onsite_prf`)/sum(`effort_onsite_prf`)  )  ,0) as fte_cost_onsite_prf_val,
+ifnull((sum(`effort_cost_onsite_proj`)/sum(`effort_onsite_proj`))    ,0) as fte_cost_onsite_proj_val,
+ifnull((sum(`revenue_prf`)/sum(`effort_tot_prf`))    ,0) as yield_prf_val,
+ifnull((sum(`revenue_proj`)/sum(`effort_tot_proj`))    ,0) as yield_proj_val,
+sum(`effort_cost_india_prf`) as effort_cost_india_prf_val,sum(`effort_cost_india_proj`) as effort_cost_india_proj_val ,sum(`effort_cost_onsite_prf`) as effort_cost_onsite_prf_val,sum(`effort_cost_onsite_proj`) as effort_cost_onsite_proj_val,
+sum(`effort_india_prf`) as effort_india_prf_val,
+sum(`effort_india_proj`) as effort_india_proj_val,
+sum(`effort_onsite_prf`) as effort_onsite_prf_val,
+sum(`effort_onsite_proj`) as effort_onsite_proj_val,IFNULL(sum(`offshore_fte_total`),0) as OffshoreFTE,
+sum(`fte_billable_count_proj`) as effort_billable_overall,
+sum(`offshore_fte_billable_count_proj`) as effort_billable_offshore,ifnull(ROUND(SUM(pyramid_value)*100/SUM(effort_india_prf),2),0) as pyramid_prf_val,IFNULL(sum(`offshore_fte_billable_count`),0) as OffshoreFTEBillableIndia,IFNULL(sum(`offshore_fte_total`),0) as OffShoreFTETotalIndia,
+IFNULL(sum(`fte_billable_count`),0) as FTEBillableCount,
+ifnull(ROUND(SUM(p1p2p3_proj)*100/SUM(effort_india_proj),2),0) as pyramid_proj_val,SUM(p1p2p3_proj) as p1p2p3_proj_val,SUM(pyramid_value) as py_val from fpm_perfm_proj_temp where report_month='Total' group by accountid ;
+
+
+
+INSERT INTO `fpm_perfm_proj_temp` (`accountid`, `account_name`, `costcode`,`report_month`,`revenue_prf`,`revenue_proj`,`rgm_prf`,`rgm_proj`,`rgm_pec_prf`,`rgm_pec_proj`,`cost_prf`,`cost_proj`,`effort_cost_prf`,`effort_cost_proj`,`travel_cost_prf`,`travel_cost_proj`,`other_cost_prf`,`other_cost_proj`,`effort_tot_prf`,`effort_tot_proj`,`effort_offshore_prf`,`effort_offshore_proj`,`utz_overall_prf`,`utz_overall_proj`,`utz_ind_prf`,`utz_ind_proj`,`fte_cost_overall_prf`,`fte_cost_overall_proj`,`fte_cost_india_prf`,`fte_cost_india_proj`,`fte_cost_onsite_prf`,`fte_cost_onsite_proj`,`yield_prf`,`yield_proj`,`effort_cost_india_prf`,`effort_cost_india_proj`,`effort_cost_onsite_prf`,`effort_cost_onsite_proj`,`pgm_status`,`effort_india_prf`,`effort_india_proj`,`effort_onsite_prf`,`effort_onsite_proj`,`fte_billable_count_proj`,`offshore_fte_billable_count_proj`,`pyramid_prf`,`pyramid_proj`,`plan_proj_flag`,`offshore_fte_total`,`fte_billable_count`,`offshore_fte_billable_count`,p1p2p3_proj,pyramid_value) 
+(select accountid, account_name, '','AccTotal',ROUND(revenue_prf_val,2),ROUND(revenue_proj_val,2),ROUND(rgm_prf_val,2),ROUND(rgm_proj_val,2),ROUND(rgm_pec_prf_val,2),ROUND(rgm_pec_proj_val,2),ROUND(cost_prf_val,2),ROUND(cost_proj_val,2),ROUND(effort_cost_prf_val,2),ROUND(effort_cost_proj_val,2),ROUND(travel_cost_prf_val,2),ROUND(travel_cost_proj_val,2),ROUND(other_cost_prf_val,2),ROUND(other_cost_proj_val,2),ROUND(effort_tot_prf_val,2),ROUND(effort_tot_proj_val,2),ROUND(effort_offshore_prf_val,2),ROUND(effort_offshore_proj_val,2),ROUND(utz_overall_prf_val,2),ROUND(utz_overall_proj_val,2),ROUND(utz_ind_prf_val,2),ROUND(utz_ind_proj_val,2),ROUND(fte_cost_overall_prf_val,2),ROUND(fte_cost_overall_proj_val,2),ROUND(fte_cost_india_prf_val,2),ROUND(fte_cost_india_proj_val,2),ROUND(fte_cost_onsite_prf_val,2),ROUND(fte_cost_onsite_proj_val,2),ROUND(yield_prf_val,2),ROUND(yield_proj_val,2),
+ROUND(effort_cost_india_prf_val,2),
+ROUND(effort_cost_india_proj_val,2),
+ROUND(effort_cost_onsite_prf_val,2),
+ROUND(effort_cost_onsite_proj_val,2),'',
+ROUND(effort_india_prf_val,2),
+ROUND(effort_india_proj_val,2),
+ROUND(effort_onsite_prf_val,2),
+ROUND(effort_onsite_proj_val,2),
+ROUND(effort_billable_overall,2),
+ROUND(effort_billable_offshore,2),
+ROUND(pyramid_prf_val,2),
+ROUND(pyramid_proj_val,2),3,OffshoreFTE,FTEBillableCount,OffshoreFTEBillableIndia,p1p2p3_proj_val,py_val from fpm_perfm_proj_tempacctotal);
+end; 
+
+
+else if(reportfilter='program') then
+Begin 
+
+
+
+DECLARE reportmonth varchar(20);
+DECLARE v_finished_GT INTEGER DEFAULT 0;
+DECLARE monthlist CURSOR FOR select 
+DATE_FORMAT(m1, '%b %Y') as monthvalue
+from
+(
+select 
+(date_format(STR_TO_DATE(startdate,'%d-%m-%Y'),'%Y-%m-%d') - INTERVAL DAYOFMONTH(date_format(STR_TO_DATE(startdate,'%d-%m-%Y'),'%Y-%m-%d'))-1 DAY) 
++INTERVAL m MONTH as m1
+from
+(
+select @rownum:=@rownum+1 as m from
+(select 1 union select 2 union select 3 union select 4) t1,
+(select 1 union select 2 union select 3 union select 4) t2,
+(select 1 union select 2 union select 3 union select 4) t3,
+(select 1 union select 2 union select 3 union select 4) t4,
+(select @rownum:=-1) t0
+) d1
+) d2 
+where binary m1<=binary date_format(STR_TO_DATE(enddate,'%d-%m-%Y'),'%Y-%m-%d')
+order by m1;
+
+DECLARE CONTINUE HANDLER FOR NOT FOUND SET  v_finished_GT=1;
+
+
+
+OPEN monthlist;
+read_loop: LOOP
+FETCH monthlist INTO monthname;
+  IF v_finished_GT = 1 THEN 
+      LEAVE read_loop;
+     END IF;
+
+                
+
+insert into fpm_perfm_proj_tempmonth_prog(account_idi,program_idi,costcodei,budg,revenue_proj_val,rgm_proj_val,cost_proj_val,effort_cost_proj_val,travel_cost_proj_val,other_cost_proj_val,effort_tot_proj_val,fte_cost_overall_proj_val,fte_cost_india_proj_val,yield_proj_val,effort_india_proj_val,effort_billable_overall,effort_billable_offshore,effort_cost_india_proj_val,
+`rgm_pec_proj_val`  ,
+  `effort_offshore_proj_val`  ,
+  `utz_overall_proj_val`  ,
+`utz_ind_proj_val`  , 
+ `effort_onsite_proj_val`  ,
+`effort_cost_onsite_proj_val`  , 
+fte_cost_onsite_proj_val  , pyramid_proj_val,
+  `report_month` )  
+select f1.account_id,f1.program_id,f1.costcode,f1.budg as budg,revenue_proj_val,rgm_proj_val,cost_proj_val,effort_cost_proj_val,travel_cost_proj_val,other_cost_proj_val,effort_tot_proj_val,fte_cost_overall_proj_val,fte_cost_india_proj_val,yield_proj_val,effort_india_proj_val,effort_billable_overall,effort_billable_offshore,effort_cost_india_proj_val,ifnull(ROUND((rgm_proj_val*100/revenue_proj_val),2),0) as rgm_pec_proj_val,ifnull(ROUND(effort_india_proj_val*100/effort_tot_proj_val,2),0) as effort_offshore_proj_val,ifnull(ROUND(effort_billable_overall*100/effort_tot_proj_val,2),0) as utz_overall_proj_val,ifnull(ROUND(effort_billable_offshore*100/effort_india_proj_val,2),0) as utz_ind_proj_val,ifnull(ROUND(effort_tot_proj_val,2),0) - ifnull(ROUND(effort_india_proj_val,2),0) as effort_onsite_proj_val,ifnull(ROUND(effort_cost_proj_val,2),0) - ifnull(ROUND(effort_cost_india_proj_val,2),0) as effort_cost_onsite_proj_val,0,pyramid_proj_val,report_month from 
+ 
+ ( SELECT account_id,program_id,costcode,FB.id as budg,FS.fpm_parameter_id,
+ifnull(sum(FC3.count_pr),0) as effort_tot_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC2.count_pr),0),ifnull(sum(FC2.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id=currencyId)),0.00))as revenue_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC4.count_pr),0),ifnull(sum(FC4.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as effort_cost_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC5.count_pr),0),ifnull(sum(FC5.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as travel_cost_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC6.count_pr),0),ifnull(sum(FC6.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as other_cost_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC7.count_pr),0),ifnull(sum(FC7.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as cost_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC8.count_pr),0),ifnull(sum(FC8.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as rgm_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC12.count_pr),0),ifnull(sum(FC12.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as yield_proj_val,if((FB.to_currency_id= currencyId),ifnull(sum(FC16.count_pr),0),ifnull(sum(FC16.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as fte_cost_overall_proj_val,
+if((FB.to_currency_id= currencyId),ifnull(sum(FC17.count_pr),0),ifnull(sum(FC17.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id= currencyId)),0.00))as fte_cost_india_proj_val,
+monthname as report_month FROM ext_fpm_finance_summary FS FORCE INDEX (newforrep) left join ext_fpm_budget_identity FB on FB.id=FS.budget_identity_id and FB.deleted !=1 left join ext_fpm_mapping_acc_pgm FM  on FM.fpm_budget_identity_id=FB.id 
+left join ext_fpm_finance_summary_count FC2 FORCE INDEX (newforrep) on FS.id=FC2.fpm_finance_summary_id and FS.fpm_parameter_id=2 and   FC2.scale =  monthname
+left join ext_fpm_finance_summary_count FC3 FORCE INDEX (newforrep) on FS.id=FC3.fpm_finance_summary_id and FS.fpm_parameter_id=3 and   FC3.scale =  monthname
+left join ext_fpm_finance_summary_count FC4 FORCE INDEX (newforrep) on FS.id=FC4.fpm_finance_summary_id and FS.fpm_parameter_id=4 and   FC4.scale =  monthname
+left join ext_fpm_finance_summary_count FC5 FORCE INDEX (newforrep) on FS.id=FC5.fpm_finance_summary_id and FS.fpm_parameter_id=5 and   FC5.scale =  monthname
+left join ext_fpm_finance_summary_count FC6 FORCE INDEX (newforrep) on FS.id=FC6.fpm_finance_summary_id and FS.fpm_parameter_id=6 and   FC6.scale =  monthname
+left join ext_fpm_finance_summary_count FC7 FORCE INDEX (newforrep) on FS.id=FC7.fpm_finance_summary_id and FS.fpm_parameter_id=7 and   FC7.scale =  monthname
+left join ext_fpm_finance_summary_count FC8 FORCE INDEX (newforrep) on FS.id=FC8.fpm_finance_summary_id and FS.fpm_parameter_id=8 and   FC8.scale =  monthname
+left join ext_fpm_finance_summary_count FC12 FORCE INDEX (newforrep) on FS.id=FC12.fpm_finance_summary_id and FS.fpm_parameter_id=12 and   FC12.scale =  monthname
+left join ext_fpm_finance_summary_count FC16 FORCE INDEX (newforrep) on FS.id=FC16.fpm_finance_summary_id and FS.fpm_parameter_id=16 and   FC16.scale =  monthname
+left join ext_fpm_finance_summary_count FC17 FORCE INDEX (newforrep) on FS.id=FC17.fpm_finance_summary_id and FS.fpm_parameter_id=17 and   FC17.scale =  monthname
+
+where FB.deleted !=1 and FS.fpm_parameter_id in (2,3,4,5,6,7,8,12,16,17)  and find_in_set(program_id, costcodeOrPgmList)  group by  monthname,program_id )f1
+left outer join 
+
+(SELECT p1.account_id,p1.costcode,p1.prog as prog,pyramid_proj_val,effort_india_proj_val,p1.effort_billable_offshore,effort_cost_india_proj_val,effort_billable_overall, monthname,p3.scale from
+
+(SELECT account_id,costcode,program_id as prog,ifnull(sum(LC9913.count_pr),0) as effort_india_proj_val,ifnull(sum(LC9915.count_pr),0) as effort_billable_offshore,if((FB.to_currency_id= currencyId),ifnull(sum(LC9916.count_pr),0),ifnull(sum(LC9916.count_pr * (select converted_rate from fpm_currency_converter where from_country_id=FB.to_currency_id and to_country_id=currencyId)),0.00))as effort_cost_india_proj_val, monthname as scale FROM ext_fpm_location_summary LS FORCE INDEX (newforrep) left join ext_fpm_budget_identity FB on FB.id=LS.budgetidentity_id and FB.deleted !=1 left join ext_fpm_mapping_acc_pgm FM on FM.fpm_budget_identity_id=LS.budgetidentity_id
+left join ext_fpm_location_summary_count LC9916 FORCE INDEX (newforrep) on LS.id=LC9916.location_summary_id and LS.pupose_type_parameter = 'Effort Cost - Total' and  LC9916.scale =  monthname
+left join ext_fpm_location_summary_count LC9913 FORCE INDEX (newforrep) on LS.id=LC9913.location_summary_id and LS.pupose_type_parameter = 'Effort - Total'  and LC9913.scale =  monthname
+left join ext_fpm_location_summary_count LC9915 FORCE INDEX (newforrep) on LS.id=LC9915.location_summary_id and LS.pupose_type_parameter = 'Bill. Effort' and  LC9915.scale =  monthname
+where find_in_set(program_id, costcodeOrPgmList) and LS.pupose_type_parameter in ('Effort - Total','Bill. Effort','Effort Cost - Total') and LS.purpose_type_name='India'  group by scale,program_id) p1
+left outer join 
+ (SELECT account_id,costcode,program_id as prog,ifnull(sum(SC.count_pr),0) as effort_billable_overall,SC.scale FROM ext_fpm_staffing_summary SS left join ext_fpm_staffing_summary_count SC  on SS.id=SC.staffing_summary_id  left join ext_fpm_budget_identity FB on FB.id=SS.budgetidentity_id and FB.deleted !=1 left join ext_fpm_mapping_acc_pgm FM on FM.fpm_budget_identity_id=SS.budgetidentity_id where find_in_set(program_id, costcodeOrPgmList) and   SC.scale =  monthname and SS.pupose_type_parameter='Bill. Effort' and SS.purpose_type_name='All' group by SC.scale,program_id) p3 on p1.prog=p3.prog and p1.scale=p3.scale
+ left outer join 
+ (select account_id,costcode,program_id as prog,sum(count_pr) as pyramid_proj_val,monthname as scale from ext_fpm_staffing_resource left join ext_fpm_staffing staff on fpm_staffing_id=staff.id and  scale=monthname and staff.fpm_location_type_id=1 join  fpm_designation desig on staff.desgnation_id=desig.id  and (desig.grade like 'P1%' or desig.grade like 'P2%' or desig.grade like 'P3%') left join ext_fpm_budget_identity FB on FB.id=staff.fpm_budget_identity_id and FB.deleted !=1 left join ext_fpm_mapping_acc_pgm FM on FM.fpm_budget_identity_id=FB.id and deleted !=1   where   find_in_set(program_id,costcodeOrPgmList)	 group by scale,program_id) p4 on  p1.prog=p4.prog and p1.scale=p4.scale) f2 on f2.prog=f1.program_id and f2.scale=f1.report_month;
+
+END LOOP read_loop;
+CLOSE monthlist;
+
+INSERT INTO `fpm_perfm_proj_temp` (`accountid`, `account_name`,`costcode`,`program_id`,`program_name`, `report_month`,`revenue_proj`,`rgm_proj`,`rgm_pec_proj`,`cost_proj`,`effort_cost_proj`,`travel_cost_proj`,`other_cost_proj`,`effort_tot_proj`,`effort_offshore_proj`,`utz_overall_proj`,`utz_ind_proj`,`fte_cost_overall_proj`,`fte_cost_india_proj`,`fte_cost_onsite_proj`,`yield_proj`,`effort_cost_india_proj`,`effort_cost_onsite_proj`,`pgm_status`,`effort_india_proj`,`effort_onsite_proj`,`fte_billable_count_proj`,`offshore_fte_billable_count_proj`,`pyramid_proj`,`plan_proj_flag`,p1p2p3_proj) 
+ (select account_idi ,(select account_name from oneprodapt.mst_accounts where account_id=account_idi limit 1),(select MC.cost_code from oneprodapt.mst_programs MP left join oneprodapt.mst_costcode
+MC on MP.costcode_id=MC.cost_code_id where MP.program_id=program_idi limit 1),program_idi,(select program_name from oneprodapt.mst_programs where program_id=program_idi limit 1),report_month,ROUND(revenue_proj_val,2),ROUND(rgm_proj_val,2),ROUND(rgm_pec_proj_val,2),ROUND(cost_proj_val,2),ROUND(effort_cost_proj_val,2),ROUND(travel_cost_proj_val,2),ROUND(other_cost_proj_val,2),ROUND(effort_tot_proj_val,2),ROUND(effort_offshore_proj_val,2),ROUND(utz_overall_proj_val,2),ROUND(utz_ind_proj_val,2),ROUND(fte_cost_overall_proj_val,2),Round(ROUND(effort_cost_onsite_proj_val,2)/round(effort_onsite_proj_val,2),2),Round(ROUND(effort_cost_onsite_proj_val,2)/round(effort_onsite_proj_val,2),2),ROUND(yield_proj_val,2),ROUND(effort_cost_india_proj_val,2),Round(effort_cost_onsite_proj_val,2),(select if(status_id = 19,'Inactive','Active') from oneprodapt.mst_programs where program_id=program_idi limit 1),
+ifnull(ROUND(effort_india_proj_val,2),0),ifnull(ROUND(effort_onsite_proj_val,2),0),ROUND(effort_billable_overall,2),ROUND(effort_billable_offshore,2),ifnull(ROUND(pyramid_proj_val*100/effort_india_proj_val,2),0),0,
+ ROUND(pyramid_proj_val,2) from fpm_perfm_proj_tempmonth_prog);
+ 
+DROP TEMPORARY TABLE IF EXISTS fpm_perfm_proj_temptotal;  
+create temporary table fpm_perfm_proj_temptotal
+select `accountid`, `account_name`,`costcode`,`program_id`,`program_name`,pgm_status,sum(`offshore_fte_billable_count_proj`) ,sum(`fte_billable_count_proj`),sum(`revenue_prf`) as revenue_prf_val,sum(`revenue_proj`) as revenue_proj_val,sum(`rgm_prf`) as rgm_prf_val,sum(`rgm_proj`) as rgm_proj_val,ifnull((sum(`rgm_prf`)/sum(`revenue_prf`)*100),0) as rgm_pec_prf_val,ifnull((sum(`rgm_proj`)/sum(`revenue_proj`)*100),0) as rgm_pec_proj_val,sum(`cost_prf`) as cost_prf_val,sum(`cost_proj`) as cost_proj_val,sum(`effort_cost_prf`) as effort_cost_prf_val,sum(`effort_cost_proj`) as effort_cost_proj_val,sum(`travel_cost_prf`) as travel_cost_prf_val,sum(`travel_cost_proj`) as travel_cost_proj_val,sum(`other_cost_prf`) as other_cost_prf_val,sum(`other_cost_proj`) as other_cost_proj_val,sum(`effort_tot_prf`) as effort_tot_prf_val,sum(`effort_tot_proj`) as effort_tot_proj_val,
+ifnull((sum(`effort_india_prf`)/sum(`effort_tot_prf`))*100  ,0) as effort_offshore_prf_val,
+ifnull((sum(`effort_india_proj`)/sum(`effort_tot_proj`))*100,0) as effort_offshore_proj_val,
+avg(`utz_overall_prf`) as utz_overall_prf_val,ifnull((sum(`fte_billable_count_proj`)/sum(`effort_tot_proj`))*100 ,0) as utz_overall_proj_val,avg(`utz_ind_prf`) as utz_ind_prf_val,ifnull((sum(`offshore_fte_billable_count_proj`)/sum(`effort_india_proj`))*100,0) as utz_ind_proj_val,
+ifnull((sum(`effort_cost_prf`)/sum(`effort_tot_prf`)),0) as fte_cost_overall_prf_val,
+ifnull((sum(`effort_cost_proj`)/sum(`effort_tot_proj`)),0) as fte_cost_overall_proj_val,
+ifnull((sum(`effort_cost_india_prf`)/sum(`effort_india_prf`)),0) as fte_cost_india_prf_val,
+ifnull((sum(`effort_cost_india_proj`)/sum(`effort_india_proj`)),0) as fte_cost_india_proj_val,
+ifnull((sum(`effort_cost_onsite_prf`)/sum(`effort_onsite_prf`)),0) as fte_cost_onsite_prf_val,
+ifnull((sum(`effort_cost_onsite_proj`)/sum(`effort_onsite_proj`)),0) as fte_cost_onsite_proj_val,
+ifnull((sum(`revenue_prf`)/sum(`effort_tot_prf`)),0) as yield_prf_val,
+ifnull((sum(`revenue_proj`)/sum(`effort_tot_proj`)),0) as yield_proj_val,
+sum(`effort_cost_india_prf`) as effort_cost_india_prf_val,sum(`effort_cost_india_proj`) as effort_cost_india_proj_val ,sum(`effort_cost_onsite_prf`) as effort_cost_onsite_prf_val,sum(`effort_cost_onsite_proj`) as effort_cost_onsite_proj_val,
+sum(`effort_india_prf`) as effort_india_prf_val,
+sum(`effort_india_proj`) as effort_india_proj_val,
+sum(`effort_onsite_prf`) as effort_onsite_prf_val,
+sum(`effort_onsite_proj`) as effort_onsite_proj_val,
+sum(`fte_billable_count_proj`) as effort_billable_overall,
+sum(`offshore_fte_billable_count_proj`) as effort_billable_offshore,ifnull(ROUND(SUM(p1p2p3_proj)*100/SUM(effort_india_proj),2),0) as pyramid_proj_val,SUM(p1p2p3_proj) as p1p2p3_proj_val from fpm_perfm_proj_temp group by program_id;
+
+
+
+INSERT INTO `fpm_perfm_proj_temp` (`accountid`, `account_name`, `costcode`,`program_id`,`program_name`,`report_month`,`revenue_prf`,`revenue_proj`,`rgm_prf`,`rgm_proj`,`rgm_pec_prf`,`rgm_pec_proj`,`cost_prf`,`cost_proj`,`effort_cost_prf`,`effort_cost_proj`,`travel_cost_prf`,`travel_cost_proj`,`other_cost_prf`,`other_cost_proj`,`effort_tot_prf`,`effort_tot_proj`,`effort_offshore_prf`,`effort_offshore_proj`,`utz_overall_prf`,`utz_overall_proj`,`utz_ind_prf`,`utz_ind_proj`,`fte_cost_overall_prf`,`fte_cost_overall_proj`,`fte_cost_india_prf`,`fte_cost_india_proj`,`fte_cost_onsite_prf`,`fte_cost_onsite_proj`,`yield_prf`,`yield_proj`,`effort_cost_india_prf`,`effort_cost_india_proj`,`effort_cost_onsite_prf`,`effort_cost_onsite_proj`,`pgm_status`,`effort_india_prf`,`effort_india_proj`,`effort_onsite_prf`,`effort_onsite_proj`,`fte_billable_count_proj`,`offshore_fte_billable_count_proj`,`pyramid_proj`,`plan_proj_flag`,p1p2p3_proj)
+  (select `accountid`, `account_name`,`costcode`,`program_id`,`program_name`,'Total',ROUND(revenue_prf_val,2),ROUND(revenue_proj_val,2),ROUND(rgm_prf_val,2),ROUND(rgm_proj_val,2),ROUND(rgm_pec_prf_val,2),ROUND(rgm_pec_proj_val,2),ROUND(cost_prf_val,2),ROUND(cost_proj_val,2),ROUND(effort_cost_prf_val,2),ROUND(effort_cost_proj_val,2),ROUND(travel_cost_prf_val,2),ROUND(travel_cost_proj_val,2),ROUND(other_cost_prf_val,2),ROUND(other_cost_proj_val,2),ROUND(effort_tot_prf_val,2),ROUND(effort_tot_proj_val,2),ROUND(effort_offshore_prf_val,2),ROUND(effort_offshore_proj_val,2),ROUND(utz_overall_prf_val,2),ROUND(utz_overall_proj_val,2),ROUND(utz_ind_prf_val,2),ROUND(utz_ind_proj_val,2),ROUND(fte_cost_overall_prf_val,2),ROUND(fte_cost_overall_proj_val,2),ROUND(fte_cost_india_prf_val,2),ROUND(fte_cost_india_proj_val,2),ROUND(fte_cost_onsite_prf_val,2),ROUND(fte_cost_onsite_proj_val,2),ROUND(yield_prf_val,2),ROUND(yield_proj_val,2),ROUND(effort_cost_india_prf_val,2),
+ROUND(effort_cost_india_proj_val,2),
+ROUND(effort_cost_onsite_prf_val,2),
+ROUND(effort_cost_onsite_proj_val,2),pgm_status, 
+ROUND(effort_india_prf_val,2),
+ROUND(effort_india_proj_val,2),
+ROUND(effort_onsite_prf_val,2),
+ROUND(effort_onsite_proj_val,2), 
+ROUND(effort_billable_overall,2),
+ROUND(effort_billable_offshore,2),
+ROUND(pyramid_proj_val,2),0,p1p2p3_proj_val from fpm_perfm_proj_temptotal);
+
+DROP TEMPORARY TABLE IF EXISTS fpm_perfm_proj_tempacctotal;
+create temporary table fpm_perfm_proj_tempacctotal
+select `accountid`, `account_name`,`costcode`,`program_id`,`program_name`,sum(`revenue_prf`) as revenue_prf_val,sum(`revenue_proj`) as revenue_proj_val,sum(`rgm_prf`) as rgm_prf_val,sum(`rgm_proj`) as rgm_proj_val,ifnull((sum(`rgm_prf`)/sum(`revenue_prf`)*100),0) as rgm_pec_prf_val,ifnull((sum(`rgm_proj`)/sum(`revenue_proj`)*100),0) as rgm_pec_proj_val,sum(`cost_prf`) as cost_prf_val,sum(`cost_proj`) as cost_proj_val,sum(`effort_cost_prf`) as effort_cost_prf_val,sum(`effort_cost_proj`) as effort_cost_proj_val,sum(`travel_cost_prf`) as travel_cost_prf_val,sum(`travel_cost_proj`) as travel_cost_proj_val,sum(`other_cost_prf`) as other_cost_prf_val,sum(`other_cost_proj`) as other_cost_proj_val,sum(`effort_tot_prf`) as effort_tot_prf_val,sum(`effort_tot_proj`) as effort_tot_proj_val,ifnull((sum(`effort_india_prf`)/sum(`effort_tot_prf`))*100,0) as effort_offshore_prf_val,
+ifnull((sum(`effort_india_proj`)/sum(`effort_tot_proj`))*100,0) as effort_offshore_proj_val,
+avg(`utz_overall_prf`) as utz_overall_prf_val,ifnull((sum(`fte_billable_count_proj`)/sum(`effort_tot_proj`))*100 ,0) as utz_overall_proj_val,avg(`utz_ind_prf`) as utz_ind_prf_val,ifnull((sum(`offshore_fte_billable_count_proj`)/sum(`effort_india_proj`))*100 ,0) as utz_ind_proj_val,
+ifnull((sum(`effort_cost_prf`)/sum(`effort_tot_prf`)),0) as fte_cost_overall_prf_val,
+ifnull((sum(`effort_cost_proj`)/sum(`effort_tot_proj`)),0) as fte_cost_overall_proj_val,
+ifnull((sum(`effort_cost_india_prf`)/sum(`effort_india_prf`)),0) as fte_cost_india_prf_val,
+ifnull((sum(`effort_cost_india_proj`)/sum(`effort_india_proj`)),0) as fte_cost_india_proj_val,
+ifnull((sum(`effort_cost_onsite_prf`)/sum(`effort_onsite_prf`)),0) as fte_cost_onsite_prf_val,
+ifnull((sum(`effort_cost_onsite_proj`)/sum(`effort_onsite_proj`)),0) as fte_cost_onsite_proj_val,
+ifnull((sum(`revenue_prf`)/sum(`effort_tot_prf`)),0) as yield_prf_val,
+ifnull((sum(`revenue_proj`)/sum(`effort_tot_proj`)),0) as yield_proj_val,
+sum(`effort_cost_india_prf`) as effort_cost_india_prf_val,sum(`effort_cost_india_proj`) as effort_cost_india_proj_val,
+sum(`effort_cost_onsite_prf`) as effort_cost_onsite_prf_val,sum(`effort_cost_onsite_proj`) as effort_cost_onsite_proj_val,
+sum(`effort_india_prf`) as effort_india_prf_val,
+sum(`effort_india_proj`) as effort_india_proj_val,
+sum(`effort_onsite_prf`) as effort_onsite_prf_val,
+sum(`effort_onsite_proj`) as effort_onsite_proj_val,
+sum(`fte_billable_count_proj`) as effort_billable_overall,
+sum(`offshore_fte_billable_count_proj`) as effort_billable_offshore,sum(`pyramid_prf`) as pyramid_prf_val,
+ifnull(ROUND(SUM(p1p2p3_proj)*100/SUM(effort_india_proj),2),0) as pyramid_proj_val,SUM(p1p2p3_proj) as p1p2p3_proj_val from fpm_perfm_proj_temp where report_month='Total' group by accountid ;
+
+INSERT INTO `fpm_perfm_proj_temp` (`accountid`, `account_name`, `costcode`,`report_month`,`revenue_prf`,`revenue_proj`,`rgm_prf`,`rgm_proj`,`rgm_pec_prf`,`rgm_pec_proj`,`cost_prf`,`cost_proj`,`effort_cost_prf`,`effort_cost_proj`,`travel_cost_prf`,`travel_cost_proj`,`other_cost_prf`,`other_cost_proj`,`effort_tot_prf`,`effort_tot_proj`,`effort_offshore_prf`,`effort_offshore_proj`,`utz_overall_prf`,`utz_overall_proj`,`utz_ind_prf`,`utz_ind_proj`,`fte_cost_overall_prf`,`fte_cost_overall_proj`,`fte_cost_india_prf`,`fte_cost_india_proj`,`fte_cost_onsite_prf`,`fte_cost_onsite_proj`,`yield_prf`,`yield_proj`,`effort_cost_india_prf`,`effort_cost_india_proj`,`effort_cost_onsite_prf`,`effort_cost_onsite_proj`,`pgm_status`,`effort_india_prf`,`effort_india_proj`,`effort_onsite_prf`,`effort_onsite_proj`,`fte_billable_count_proj`,`offshore_fte_billable_count_proj`,`pyramid_prf`,`pyramid_proj`,`plan_proj_flag`,p1p2p3_proj) 
+ (select `accountid`, `account_name`, '','AccTotal',ROUND(revenue_prf_val,2),ROUND(revenue_proj_val,2),ROUND(rgm_prf_val,2),ROUND(rgm_proj_val,2),ROUND(rgm_pec_prf_val,2),ROUND(rgm_pec_proj_val,2),ROUND(cost_prf_val,2),ROUND(cost_proj_val,2),ROUND(effort_cost_prf_val,2),ROUND(effort_cost_proj_val,2),ROUND(travel_cost_prf_val,2),ROUND(travel_cost_proj_val,2),ROUND(other_cost_prf_val,2),ROUND(other_cost_proj_val,2),ROUND(effort_tot_prf_val,2),ROUND(effort_tot_proj_val,2),ROUND(effort_offshore_prf_val,2),ROUND(effort_offshore_proj_val,2),ROUND(utz_overall_prf_val,2),ROUND(utz_overall_proj_val,2),ROUND(utz_ind_prf_val,2),ROUND(utz_ind_proj_val,2),ROUND(fte_cost_overall_prf_val,2),ROUND(fte_cost_overall_proj_val,2),ROUND(fte_cost_india_prf_val,2),ROUND(fte_cost_india_proj_val,2),ROUND(fte_cost_onsite_prf_val,2),ROUND(fte_cost_onsite_proj_val,2),ROUND(yield_prf_val,2),ROUND(yield_proj_val,2),
+ROUND(effort_cost_india_prf_val,2),ROUND(effort_cost_india_proj_val,2),ROUND(effort_cost_onsite_prf_val,2),ROUND(effort_cost_onsite_proj_val,2),'',
+ROUND(effort_india_prf_val,2),ROUND(effort_india_proj_val,2),ROUND(effort_onsite_prf_val,2),ROUND(effort_onsite_proj_val,2),ROUND(effort_billable_overall,2),
+ROUND(effort_billable_offshore,2),ROUND(pyramid_prf_val,2),ROUND(pyramid_proj_val,2),0,p1p2p3_proj_val from fpm_perfm_proj_tempacctotal);
+
+end;
+end if;
+end if;
+end if;
+
+BEGIN
+DECLARE reportmonth varchar(20);
+DECLARE v_finished_GT INTEGER DEFAULT 0;
+DECLARE monthlistGT CURSOR FOR SELECT report_month from fpm_perfm_proj_temp where report_month!='Total' group by report_month;
+DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_finished_GT=1;
+
+OPEN monthlistGT;
+  read_loop: LOOP
+   FETCH monthlistGT INTO reportmonth;
+                IF v_finished_GT = 1 THEN 
+      LEAVE read_loop;
+     END IF;
+select sum(`revenue_prf`),sum(`revenue_proj`),sum(`rgm_prf`),sum(`rgm_proj`),ifnull((sum(`rgm_prf`)/sum(`revenue_prf`)*100),0),ifnull((sum(`rgm_proj`)/sum(`revenue_proj`)*100),0),sum(`cost_prf`),sum(`cost_proj`),sum(`effort_cost_prf`),sum(`effort_cost_proj`),sum(`travel_cost_prf`),sum(`travel_cost_proj`),sum(`other_cost_prf`),sum(`other_cost_proj`),sum(`effort_tot_prf`),sum(`effort_tot_proj`),ifnull((sum(`effort_india_prf`)/sum(`effort_tot_prf`)*100),0),
+ifnull((sum(`effort_india_proj`)/sum(`effort_tot_proj`)*100),0),(sum(`fte_billable_count`)/sum(`effort_tot_prf`))*100,ifnull((sum(`fte_billable_count_proj`)/sum(`effort_tot_proj`)*100),0),(sum(`offshore_fte_billable_count`)/sum(`effort_india_prf`))*100,ifnull((sum(`offshore_fte_billable_count_proj`)/sum(`effort_india_proj`)*100),0),ifnull((sum(`effort_cost_prf`)/sum(`effort_tot_prf`)),0),
+ifnull((sum(`effort_cost_proj`)/sum(`effort_tot_proj`)),0),ifnull((sum(`effort_cost_india_prf`)/sum(`effort_india_prf`)),0),
+ifnull((sum(`effort_cost_india_proj`)/sum(`effort_india_proj`)),0),ifnull((sum(`effort_cost_onsite_prf`)/sum(`effort_onsite_prf`)),0),
+ifnull((sum(`effort_cost_onsite_proj`)/sum(`effort_onsite_proj`)),0),ifnull((sum(`revenue_prf`)/sum(`effort_tot_prf`)),0),
+ifnull((sum(`revenue_proj`)/sum(`effort_tot_proj`)),0),sum(`effort_cost_india_prf`),sum(`effort_cost_india_proj`),sum(`effort_cost_onsite_prf`),sum(`effort_cost_onsite_proj`),sum(`effort_india_prf`),sum(`effort_india_proj`),sum(`effort_onsite_prf`),sum(`effort_onsite_proj`),sum(`fte_billable_count_proj`),sum(`offshore_fte_billable_count_proj`),sum(`pyramid_value`)*100/(sum(`effort_india_prf`)),SUM(p1p2p3_proj)*100/SUM(effort_india_proj) into revenue_prf_valgt,revenue_proj_valgt,rgm_prf_valgt,rgm_proj_valgt,rgm_pec_prf_valgt,rgm_pec_proj_valgt,cost_prf_valgt,cost_proj_valgt,effort_cost_prf_valgt,effort_cost_proj_valgt,travel_cost_prf_valgt,travel_cost_proj_valgt,other_cost_prf_valgt,other_cost_proj_valgt,effort_tot_prf_valgt,effort_tot_proj_valgt,effort_offshore_prf_valgt,effort_offshore_proj_valgt,utz_overall_prf_valgt,utz_overall_proj_valgt,utz_ind_prf_valgt,utz_ind_proj_valgt,fte_cost_overall_prf_valgt,fte_cost_overall_proj_valgt,fte_cost_india_prf_valgt,fte_cost_india_proj_valgt,fte_cost_onsite_prf_valgt,fte_cost_onsite_proj_valgt,yield_prf_valgt,yield_proj_valgt,effort_cost_india_prf_valgt,effort_cost_india_proj_valgt,effort_cost_onsite_prf_valgt,effort_cost_onsite_proj_valgt, 
+effort_india_prf_valgt,effort_india_proj_valgt,effort_onsite_prf_valgt,effort_onsite_proj_valgt,effort_billable_overall_valgt,effort_billable_offshore_valgt,pyramid_prf_valgt,pyramid_proj_valgt from fpm_perfm_proj_temp where (DATE_FORMAT(STR_TO_DATE(report_month,"%b %Y"),"%m %Y")= DATE_FORMAT(STR_TO_DATE(reportmonth,"%b %Y"),"%m %Y") or report_month=reportmonth);
+
+INSERT INTO `fpm_perfm_proj_temp` (`accountid`, `account_name`, `costcode`,`report_month`,`revenue_prf`,`revenue_proj`,`rgm_prf`,`rgm_proj`,`rgm_pec_prf`,`rgm_pec_proj`,`cost_prf`,`cost_proj`,`effort_cost_prf`,`effort_cost_proj`,`travel_cost_prf`,`travel_cost_proj`,`other_cost_prf`,`other_cost_proj`,`effort_tot_prf`,`effort_tot_proj`,`effort_offshore_prf`,`effort_offshore_proj`,`utz_overall_prf`,`utz_overall_proj`,`utz_ind_prf`,`utz_ind_proj`,`fte_cost_overall_prf`,`fte_cost_overall_proj`,`fte_cost_india_prf`,`fte_cost_india_proj`,`fte_cost_onsite_prf`,`fte_cost_onsite_proj`,`yield_prf`,`yield_proj`,`effort_cost_india_prf`,`effort_cost_india_proj`,`effort_cost_onsite_prf`,`effort_cost_onsite_proj`,`pgm_status`,`effort_india_prf`,`effort_india_proj`,`effort_onsite_prf`,`effort_onsite_proj`,`offshore_fte_billable_count_proj`,`fte_billable_count_proj`,`pyramid_prf`,`pyramid_proj`,`plan_proj_flag`) VALUES ('GT','Grand total', '',case when(reportmonth!='AccTotal') then reportmonth else 'Total' end ,ROUND(revenue_prf_valgt,2),ROUND(revenue_proj_valgt,2),ROUND(rgm_prf_valgt,2),ROUND(rgm_proj_valgt,2),ROUND(rgm_pec_prf_valgt,2),ROUND(rgm_pec_proj_valgt,2),ROUND(cost_prf_valgt,2),ROUND(cost_proj_valgt,2),ROUND(effort_cost_prf_valgt,2),ROUND(effort_cost_proj_valgt,2),ROUND(travel_cost_prf_valgt,2),ROUND(travel_cost_proj_valgt,2),ROUND(other_cost_prf_valgt,2),ROUND(other_cost_proj_valgt,2),ROUND(effort_tot_prf_valgt,2),ROUND(effort_tot_proj_valgt,2),ROUND(effort_offshore_prf_valgt,2),ROUND(effort_offshore_proj_valgt,2),ROUND(utz_overall_prf_valgt,2),ROUND(utz_overall_proj_valgt,2),ROUND(utz_ind_prf_valgt,2),ROUND(utz_ind_proj_valgt,2),ROUND(fte_cost_overall_prf_valgt,2),ROUND(fte_cost_overall_proj_valgt,2),ROUND(fte_cost_india_prf_valgt,2),ROUND(fte_cost_india_proj_valgt,2),ROUND(fte_cost_onsite_prf_valgt,2),ROUND(fte_cost_onsite_proj_valgt,2),ROUND(yield_prf_valgt,2),ROUND(yield_proj_valgt,2),ROUND(effort_cost_india_prf_valgt,2),
+ROUND(effort_cost_india_proj_valgt,2),ROUND(effort_cost_onsite_prf_valgt,2),ROUND(effort_cost_onsite_proj_valgt,2),'',ROUND(effort_india_prf_valgt,2),ROUND(effort_india_proj_valgt,2),ROUND(effort_onsite_prf_valgt,2),ROUND(effort_onsite_proj_valgt,2),ROUND(effort_billable_offshore_valgt,2),ROUND(effort_billable_overall_valgt,2),ROUND(pyramid_prf_valgt,2),ROUND(pyramid_proj_valgt,2),3);
+     END LOOP read_loop;
+CLOSE monthlistGT;
+END;
+
+select * from fpm_perfm_proj_temp;
+
+END
